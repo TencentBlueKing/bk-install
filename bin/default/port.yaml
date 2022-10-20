@@ -1,0 +1,345 @@
+lesscode:
+  lesscode:
+    port: 5002
+    consul: lesscode
+fta:
+  fta:
+    port: 13031
+    consul: fta-api 
+bkmonitorv3:
+  monitor: 
+    port: 10204
+    consul: monitor.bkmonitorv3
+  influxdb-proxy: 
+    port: 10203 
+    consul: influxdb-proxy.bkmonitorv3
+  transfer: 
+    port: 10202
+    consul: transfer.bkmonitorv3
+  grafana: 
+    port: 3000
+    consul: grafana.bkmonitorv3
+  unify-query:
+    port: 10206
+    consul: unify-query.bkmonitorv3
+  ingester:
+    port: 10220
+    consul: ingester.bkmonitorv3
+cmdb: 
+  api: 
+    port: 9001
+    consul: cmdb-api
+  admin:
+    port: 9000
+    consul: cmdb-admin
+  auth:
+    port: 9002
+    consul: cmdb-auth
+  cloud:
+    port: 9003
+    consul: cmdb-cloud
+  core:
+    port: 9004
+    consul: cmdb-core
+  datacollection:
+    port: 9005
+    consul: cmdb-datacollection
+  event:
+    port: 9006
+    consul: cmdb-event
+  host:
+    port: 9007
+    consul: cmdb-host
+  operation:
+    port: 9008
+    consul: cmdb-operation
+  proc:
+    port: 9009
+    consul: cmdb-proc
+  synchronize:
+    port: 9010
+    consul: cmdb-synchronize
+  task:
+    port: 9011
+    consul: cmdb-task
+  topo:
+    port: 9012
+    consul: cmdb-topo
+  web:
+    port: 9013
+    consul: cmdb-web
+  cache:
+    port: 9014
+    consul: cmdb-cache
+paas:
+  paas: 
+    port: 8001
+    consul: paas-paas
+  appengine:
+    port: 8000
+    consul: paas-appengine
+  esb: 
+    port: 8002
+    consul: paas-esb
+  login:
+    port: 8003
+    consul: paas-login
+  console:
+    port: 8004
+    consul: paas-console
+  apigw:
+    port: 8005
+    consul: paas-apigw
+iam:
+  server:
+    port: 5001
+    consul: bkiam
+iam_search_engine:
+  server:
+    port: 5003
+    consul: bkiam-search-engine
+ssm: 
+  server:
+    port: 5000
+    consul: bkssm
+auth:
+  server:
+    port: 5009
+    consul: bkauth
+usermgr: 
+  api:
+    port: 8009
+    consul: usermgr
+
+
+gse:
+  gse_api:
+    port: 59313 
+    consul: gse-api
+  gse_task:
+    port: 48673 
+    consul: gse-task
+  gse_btsvr:
+    port:
+    consul:
+  gse_data:
+    port: 58625
+    consul: gse-data
+  gse_dba:
+    port:
+    consul:
+  gse_alarm:
+    port:
+    consul:
+  gse_procmgr:
+    port: 52030 
+    consul: gse-procmgr
+  gse_dataop:
+    port:
+    consul:
+  gse_config:
+    port: 59702
+    consul: gse-config
+
+job:
+  job-config:
+    port: 10500
+    consul:
+  job-gateway:
+    port: 10503
+    consul:
+  job-manage:
+    port: 10505
+    consul:
+  job-execute:
+    port: 10502
+    consul:
+  job-crontab:
+    port: 10501
+    consul:
+  job-logsvr:
+    port: 10504
+    consul:
+  job-backup:
+    port: 10507
+    consul:
+  job-analysis:
+    port: 10508
+    consul:
+
+paas_agent:
+  paas_agent:
+    port: 8445
+    consul: appo
+
+bknodeman: 
+  nodeman:
+    port: 10300
+    consul: nodeman-api
+
+bklog:
+  api:
+    port: 10400
+    consul: bklog-api 
+  grafana:
+    port: 10401
+    consul: bklog-grafana 
+bkiam:
+  server:
+    port: 5001
+    consul: bkiam
+bkiam_search_engine:
+  server:
+    port: 5003
+    consul: bkiam-search-engine
+
+
+
+redis:
+  default:
+    port: 6379
+    consul: redis
+    name: default
+  paas:
+    port: 6379
+    consul: redis-paas
+    name: redis
+  paas_plugins:
+    port: 6379
+    consul: redis-paasplugins
+    name: redis
+redis_sentinel:
+  default:
+    # 默认第一个端口为单节点
+    port: 6380,26379
+    consul: redis-sentinel
+    master_name: mymaster 
+rabbitmq:
+  default:
+    port: 5672
+    consul: rabbitmq
+zk: 
+  default:
+    port: 2181
+    consul: zk 
+mongodb: 
+  default:
+    port: 27017
+    consul: mongodb
+    name: admin
+  cmdb:
+    port: 27017
+    consul: mongodb-cmdb
+    name: cmdb
+  job:
+    port: 27017
+    consul: mongodb-job
+    name: joblog
+  gse:
+    port: 27017
+    consul: mongodb-gse
+    name: gse
+es7:
+  default:
+    # 第一个为rest port, 第二个为transport port
+    port: 9200,9300
+    consul: es7
+influxdb:
+  default:
+    port: 8086
+    consul: influxdb
+mysql:
+  lesscode:
+    port: 3306
+    consul: mysql-lesscode
+    name: bklesscode
+  default:
+    port: 3306 
+    consul: mysql-default
+    name: root
+  paas:
+    port: 3306 
+    consul: mysql-paas
+    name: paas
+  iam: 
+    port: 3306
+    consul: mysql-iam 
+    name: iam
+  usermgr:
+    port: 3306
+    consul: mysql-usermgr
+    name: usermgr
+  nodeman:
+    port: 3306
+    consul: mysql-nodeman
+    name: nodeman
+  monitorv3:
+    port: 3306
+    consul: mysql-monitorv3
+    name: bkmonitorv3
+  ssm:
+    port: 3306
+    consul: mysql-ssm
+    name: bkssm 
+  auth:
+    port: 3306
+    consul: mysql-auth
+    name: bkauth
+  job:
+    port: 3306
+    consul: mysql-job
+    name: job
+  fta:
+    port: 3306
+    consul: mysql-fta
+    name: fta
+  log:
+    port: 3306
+    consul: mysql-log
+    name: bklog
+  apigw:
+    port: 3306
+    consul: mysql-apigw
+    name: apigw
+  
+pypi:
+  default:
+    port: 8081
+    consul: pypi
+yum:
+  default:
+    port: 8080
+    consul: yum
+kafka:
+  default:
+    port: 9092
+    consul: kafka
+beanstalk:
+  default:
+    port: 11300
+    consul: beanstalk
+
+# 6000-6020 为 apigw 预留端口
+apigw:
+  api-support:
+    port: 6002
+    consul: apigw-support 
+  dashboard:
+    port: 6000
+    consul: apigw-dashboard
+  dashboard-fe:
+    port: 6001
+    consul:
+  bk-esb:
+    port: 6010
+    consul: apigw-bk-esb
+  api-support-fe:
+    port: 6003
+    consul:
+  operator:
+    port: 6004
+    consul: apigw-operator
+  apigateway:
+    port: 6006
+    consul: apigw-apigateway
+  

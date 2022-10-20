@@ -1,0 +1,13 @@
+------------------------- agreements ---------------------------------
+    Dear users, welcome to use the Tencent BlueKing Software. Please
+access http://bk.tencent.com/info/#laws to read the Tencent BlueKing
+Software License and Service Agreement carefully. You have no right to
+install or use the Software and related services unless you have read
+and accepted all the terms of this Agreement. By downloading, install-
+ing, using or logging in the Software, you shall be deemed to have
+read and agreed to be bound by the Agreement above. If you have under-
+stood the above content, please enter "yes" to continue installation,
+otherwise, please enter "no" to abort. Thank you for your understan-
+ding and support of the Tencent BlueKing Software. 
+----------------------------------------------------------------------
+yes/no ? 

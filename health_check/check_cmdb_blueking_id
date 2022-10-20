@@ -1,0 +1,36 @@
+#!/bin/bash
+# 用途：调用esb接口，检查是否能获取《蓝鲸》业务的业务ID
+
+SELF_DIR=$(dirname "$(readlink -f "$0")")
+CTRL_DIR=$SELF_DIR/../
+
+[[ -r $CTRL_DIR/load_env.sh ]] && . $CTRL_DIR/load_env.sh
+
+if [[ -z "$BK_PAAS_APP_SECRET" ]]; then
+    echo "load_env.sh failed. BK_PAAS_APP_SECRET is empty"
+    exit 1
+fi
+
+RESP=$(curl -s -o $tmpfile -X POST http://$BK_PAAS_PRIVATE_ADDR/api/c/compapi/v2/cc/search_business/ --data @<(cat <<EOF
+{
+    "bk_app_code": "$BK_PAAS_APP_CODE",
+    "bk_app_secret": "$BK_PAAS_APP_SECRET",
+    "bk_username": "admin",
+    "fields": [
+        "bk_biz_id",
+        "bk_biz_name"
+    ],
+    "condition": {
+        "bk_biz_name": "蓝鲸"
+    }
+}
+EOF
+)
+)
+
+if [[ $(jq -r .result <<<"$RESP") = "true" ]]; then
+    jq -r '.data.info[] | [.bk_biz_name,.bk_biz_id] | @tsv' <<<"$RESP"
+else
+    echo "查询<蓝鲸>业务的bizid失败"
+    exit 1
+fi

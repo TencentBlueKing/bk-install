@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Description: 安装前配置域名和目录
+
+SELF_DIR=$(dirname "$(readlink -f "$0")")
+DEFAULT_BK_HOME=
+DEFAULT_BK_DOMAIN=
+DEFAULT_ENV=$SELF_DIR/bin/default/global.env
+USERDEF_ENV=${SELF_DIR}/bin/03-userdef/global.env
+
+# get default value
+if [[ -s $DEFAULT_ENV ]]; then
+    . "$DEFAULT_ENV"
+    if [[ -z $BK_HOME || -z $BK_DOMAIN ]]; then
+        echo "BK_HOME or BK_DOMAIN is empty in $DEFAULT_ENV"
+        exit 1
+    else
+        DEFAULT_BK_HOME=$BK_HOME
+        DEFAULT_BK_DOMAIN=$BK_DOMAIN
+    fi
+else
+    echo "$DEFAULT_ENV is empty"
+    exit 1
+fi
+
+change_bk_domain () {
+    local old_domain=$1
+    local new_domain=$2
+    local new_domain_env new_domain_env_keys
+    # BK_DOMAIN 不能是顶级域名，没有\.字符时
+    if ! [[ $new_domain =~ \. ]]; then
+        echo "BK_DOMAIN不应该是顶级域名，请配置二级域名或者以上"
+        exit 1
+    fi
+    new_domain_env=$(grep -w "$old_domain" "$DEFAULT_ENV" | sed "s/$old_domain/$new_domain/")
+    new_domain_env_keys=( $(awk -F= '{print $1}' <<<"$new_domain_env") )
+    
+    if [[ ${#new_domain_env_keys[@]} -lt 13 ]]; then
+        echo "generate new domain env variables failed"
+        exit 1
+    fi 
+    
+    if [[ -f $USERDEF_ENV ]]; then
+        cp -a ${SELF_DIR}/bin/03-userdef/{global.env,global.env_$(date +%Y%m%d_%H%M%S)}
+        # delete same keys already exists in global.env
+        for k in "${new_domain_env_keys[@]}"; do 
+            sed -i "/^${k}=/d" "$USERDEF_ENV"
+        done
+    fi
+    # append new env keys
+    echo "$new_domain_env" >> "$USERDEF_ENV"
+}
+
+change_bk_home () {
+    local new_home=${1%/} # strip last trailling / 
+    if [[ -s $SELF_DIR/.path ]]; then
+        echo "WARNING: $SELF_DIR/.path already exists, will not change BK_HOME BK_CERT_PATH"
+        return 1
+    fi
+    if ! [[ ${new_home} =~ ^/[a-zA-Z0-9_]+ ]]; then
+        echo "ERROR: BK_HOME should be a valid unix path meet regex ^/[a-zA-Z0-9_]+ pattern"
+        return 1
+    fi
+    if [[ -f ${SELF_DIR}/bin/03-userdef/global.env ]]; then
+        cp -a ${SELF_DIR}/bin/03-userdef/{global.env,global.env_$(date +%Y%m%d_%H%M%S)}
+        # delete same keys already exists in global.env
+        sed -i "/^BK_HOME=/d" "$USERDEF_ENV"
+        sed -i "/^BK_CERT_PATH=/d" "$USERDEF_ENV"
+    fi
+    # append new env keys
+    echo "BK_HOME=$new_home" >> "$USERDEF_ENV"
+    echo "BK_CERT_PATH=$new_home/cert" >> "$USERDEF_ENV"
+    # place .path
+    echo "$new_home" > $SELF_DIR/.path
+}
+
+usage () {
+    cat <<EOF
+用法: 
+    ./configure [ -h --help -?  查看帮助 ]
+            [ -d, --domain      [可选] "配置安装蓝鲸的域名(BK_HOME变量)，默认为 $DEFAULT_BK_DOMAIN" ]
+            [ -p, --prefix      [可选] "配置安装蓝鲸的目标路径，默认为 $DEFAULT_BK_HOME" ]
+EOF
+}
+
+(( $# == 0 )) && usage && exit 1
+while (( $# > 0 )); do 
+    case "$1" in
+        -d | --domain )
+            shift
+            NEW_DOMAIN=$1
+            ;;
+        -p | --prefix )
+            shift
+            NEW_BK_HOME=$1
+            ;;
+        -*)
+            error "不可识别的参数: $1"
+            ;;
+        *) 
+            break
+            ;;
+    esac
+    shift 
+done 
+
+if [[ -n $NEW_DOMAIN ]]; then
+    echo "change BK_DOMAIN related varibales in $USERDEF_ENV"
+    change_bk_domain "$DEFAULT_BK_DOMAIN" "$NEW_DOMAIN"
+fi
+if [[ -n $NEW_BK_HOME ]]; then
+    echo "change BK_HOME BK_CERT_PATH variables in $USERDEF_ENV"
+    change_bk_home "$NEW_BK_HOME"
+fi
+if [[ -s $USERDEF_ENV ]]; then
+    echo 
+    echo "Preview of your user defined variables:"
+    echo "-----------------------------------------"
+    cat "$USERDEF_ENV"
+    echo "-----------------------------------------"
+fi
