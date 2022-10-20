@@ -1,0 +1,88 @@
+# vim:ft=sh sts=4 ts=4
+source $CTRL_DIR/utils.fc
+source $CTRL_DIR/bin/02-dynamic/hosts.env
+
+update () {
+    local m=$1
+
+    check_name update $m
+    update_$m
+}
+
+update_consul () {
+    local ip
+
+    cd $CTRL_DIR
+    step "update consul configurations"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "export ENCRYPT_KEY=$(_app_token consul);
+        rm -f $INSTALL_PATH/etc/consul.d/*.json;
+        ./pxs -c install.config -o -e -s -p $INSTALL_PATH -a $ip;
+        source ./control.rc; reload_consul"
+    done
+}
+
+update_rcfile () {
+    local ip
+
+    cd $CTRL_DIR
+    step "update \$HOME/.bkrc file"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "gen_bkrc"
+    done
+}
+
+update_hosts () {
+    local ip
+
+    step "update /etc/hosts"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "add_hosts"
+    done
+}
+
+update_hosts_bcs () {
+    step "update /etc/hosts for bcs"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "source $CTRL_DIR/utils.fc; add_hosts_bcs"
+    done
+}
+
+update_hosts_paas () {
+    local ip
+
+    step "update /etc/hosts for bkce"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "add_hosts_paas"
+    done
+}
+
+update_hosts_ci () {
+    local ip
+
+    step "update /etc/hosts for ci"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "add_hosts_ci"
+    done
+}
+
+update_hostname () {
+    local ip
+
+    step "set hostname for all hosts"
+    for ip in ${ALL_IP[@]}; do
+        rcmd root@$ip "set_hostname"
+    done
+}
+
+update_appo_script () {
+    for ip in ${APPO_IP[@]} ${APPT_IP[@]}; do
+        _rsync appmgr/ root@$ip:$INSTALL_PATH/paas_agent/paas_agent/etc/build/
+    done
+}
+
+update_bkenv () {
+    step "update bkenv for all hosts"
+    pssh -i -h <(printf "%s\n" "${ALL_IP[@]}") "source ${CTRL_DIR}/functions;source ${CTRL_DIR}/.rcmdrc;source ${CTRL_DIR}/load_env.sh;gen_bkrc"
+    pssh -i -h <(printf "%s\n" "${ALL_IP[@]}") "set -a; source ${CTRL_DIR}/load_env.sh; $CTRL_DIR/bin/update_bk_env.sh"
+}

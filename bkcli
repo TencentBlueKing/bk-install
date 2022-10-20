@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Description: blueking ops command line wrapper
+# shellcheck disable=SC1091
+
+set -e
+main_usage () {
+    echo "Usage: ${0##*/} ACTION MODULE_NAME [ project ]"
+    echo "  ACTION: sync,install,start,stop,restart,status,initdata,upgrade,render"
+    echo "  "
+    echo "  sync module                     synchronize files to target hosts."
+    echo "  install module [ project ]      installing module"
+    echo "  stop module [ project ]         stop process for module"
+    echo "  start module [ project ]        start process for module"
+    echo "  restart module [ project ]      restart process for module"
+    echo "  status module [project ]        get process running status for module"
+    echo "  initdata module                 init module after install, such as database, permission model etc."
+    echo "  upgrade module                  upgrade module to new version"
+    echo "  render module                   generater configuration files from templates"
+    echo "  check module                    check service health"
+
+    exit 0
+}
+
+cd "${BASH_SOURCE%/*}" 2>/dev/null
+CTRL_DIR=${CTRL_DIR:-$(pwd)}
+export CTRL_DIR
+
+# 从install.config中生成hosts.env文件
+"${CTRL_DIR}"/bin/bk-install-config-parser.awk "${CTRL_DIR}"/install.config > "${CTRL_DIR}"/bin/02-dynamic/hosts.env
+
+source ./functions
+
+# 检查Shell Type
+shell_type_check 
+
+log "$@" >/dev/null
+
+# 检查是否能正确获取内网 IP
+check_lanip
+
+# 增加中控机标记文件
+set_controller
+
+# 检查本机是否为中控机, 不是中控机则退出
+check_if_is_controller
+
+# 设置安装路径, 社区版默认为/data/bkce, 企业版默认为 /data/bkee
+check_install_path "$CTRL_DIR"
+
+# 检查基础路径: 产品包解压路经, 安装路径. 两路径不能相同.
+# INSTALL_PATH, PKG_SRC_PATH, CTRL_DIR
+check_base_var
+
+# 设置公共环境变量
+# BK_HOME, CONF_HOME, CERT_PATH, DATA_HOME, PATH, LD_LIBRARY_PATH, OBJC_INCLUDE_PATH LC_ALL
+set_global_var
+
+action=$1
+module=$2
+shift $(($# > 1 ? 2 : 1))   # in case $# <=1
+
+case $action in
+    check)
+        ./check.sh "$module" "$@"
+        ;;
+    sync)
+        ./deliver.sh "$module" "$@"
+        ;;
+    install)
+        ./install.sh "$module" "$@"
+        ;;
+    upgrade)
+        "${CTRL_DIR}"/upgrade.sh "$module" "$@"
+        ;;
+    render)
+        "${CTRL_DIR}"/render.sh "$module" "$@"
+        ;;
+    initdata)
+        source ./initdata.sh
+        _initdata_"${module}" "${@}"
+        ;;
+    start|stop|restart)
+        "${CTRL_DIR}"/control.sh "$action" "$module" "$@"
+        ;;
+    status)
+        ./status.sh "$module" "$@"
+        ;;
+    update)
+        source ./update.rc
+        update "$module" "$@"
+        ;;
+    *)
+        main_usage
+        exit 0
+        ;;
+esac

@@ -1,0 +1,13 @@
+[basic]
+10.0.0.1 consul,nginx,mongodb,mysql,zk(config),rabbitmq
+10.0.0.2 paas,usermgr,iam,ssm,cmdb,job,nodeman(nodeman)
+10.0.0.3 license,appo,gse,redis
+
+[fta]
+10.0.0.3 fta,beanstalk
+
+[bkmonitorv3]
+10.0.0.4 kafka(config),influxdb(bkmonitorv3),es7,monitorv3(influxdb-proxy),monitorv3(monitor),monitorv3(grafana),monitorv3(transfer)
+
+[bklog]
+10.0.0.5 log(api),log(grafana)

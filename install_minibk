@@ -1,0 +1,69 @@
+#!/bin/bash
+
+export LC_ALL=en_US.UTF-8
+
+# source default
+while getopts :yl: arg; do
+    case $arg in
+        y) export AUTO_YES=1
+          ;;
+        l) export LAN_IP="$OPTARG"
+          ;;
+        *) echo "Usage: $0 -y -l <本机IP>"; exit 1
+           ;;
+    esac
+done
+
+if [[ -n "$SSH_CONNECTION" ]]; then
+    ssh_info=($SSH_CONNECTION)
+    LAN_IP=${ssh_info[2]}
+    echo "auto guess current LAN_IP is $LAN_IP"
+elif [[ -n "$LAN_IP" ]]; then
+    echo "get LAN_IP from command line <$LAN_IP>"
+    export LAN_IP=$LAN_IP
+else
+    echo "未指定本机内网 IP（LAN_IP）"
+    echo "Usage: $0 -y -l <本机IP>"
+    exit 1
+fi
+
+if [ -f install.config ]; then
+    backup_suffix=$(date +%Y%m%d_%H%M%S)
+    echo "install.config exists. backup it to install.config.$backup_suffix"
+    cp -vf install.config install.config."$backup_suffix"
+fi
+
+mkdir -p /etc/blueking/env
+echo LAN_IP="$LAN_IP" > /etc/blueking/env/local.env
+
+# 生成单机部署的install.config
+sed -r "s/10\.0\.[0-9]+\.[0-9]+/$LAN_IP/" install.config.SP.sample > install.config
+
+# 生成ssh证书
+bash ./configure_ssh_without_pass
+
+
+if [[ "$AUTO_YES" -eq 1 ]]; then
+    ./bk_install common && ./health_check/check_bk_controller.sh && ./bk_install paas && ./bk_install app_mgr \
+    && ./bk_install cmdb && ./bk_install job \
+    && ./bk_install bknodeman \
+    && ./bk_install saas-o bk_iam && ./bk_install saas-o bk_user_manage && ./bk_install saas-o bk_sops && ./bk_install saas-o bk_itsm
+else
+    echo "you can use following command to install whole blueking suit in one command"
+    echo "./bk_install common && ./bk_install paas && ./bk_install app_mgr && ./bk_install cmdb \\"
+    echo "&& ./bk_install job && ./bk_install bknodeman && ./bk_install saas-o bk_iam \\"
+    echo "&& ./bk_install saas-o bk_user_manage && ./bk_install saas-o bk_sops && ./bk_install saas-o bk_itsm"
+    echo
+    echo "OR you can install one by one manually:"
+    echo "./bk_install common"
+    echo "./bk_install paas"
+    echo "./bk_install app_mgr"
+    echo "./bk_install cmdb"
+    echo "./bk_install job"
+    echo "./bk_install bknodeman"
+    echo "./bk_install saas-o bk_iam"
+    echo "./bk_install saas-o bk_user_manage"
+    echo "./bk_install saas-o bk_sops"
+    echo "./bk_install saas-o bk_itsm"
+    echo
+fi
