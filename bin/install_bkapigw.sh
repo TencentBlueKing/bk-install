@@ -179,8 +179,6 @@ rsync -a --delete "${MODULE_SRC_DIR}"/$MODULE/ "$PREFIX/$MODULE/"
     "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*
 
 chmod 755 -R "$PREFIX"/$MODULE/operator/
-chmod 755 "$PREFIX"/$MODULE/apigateway/apisix/start.sh
-chmod 755 "$PREFIX"/$MODULE/apigateway/thunderstone
 
 cat <<EOF > /etc/sysconfig/bk-apigw-"$APIGW_MODULE"
 PORT=${PORTS[$APIGW_MODULE]}
