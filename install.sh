@@ -704,6 +704,12 @@ install_etcd () {
     done
 }
 
+install_apisix () {
+    local module=apisix
+    emphasize "install apix on host: apigw"
+    "${SELF_DIR}"/pcmd.sh -m apigw "${CTRL_DIR}/bin/install_apisix.sh -p ${INSTALL_PATH}" 
+}
+
 install_apigw_fe () {
     local module=apigw
     local target_name=$(map_module_name $module)
@@ -1354,7 +1360,7 @@ module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
 
 case $module in
-    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|nfs|dbcheck|controller|lesscode|node|bkapi|apigw|etcd)
+    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|nfs|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix)
         install_"${module}" $@
         ;;
     paas_plugins)
