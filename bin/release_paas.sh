@@ -252,9 +252,9 @@ if [[ $RELEASE_TYPE = tgz ]]; then
     tar -xf "$TGZ_PATH" -C "$TMP_DIR"/
     # 更新全局文件
     log "updating 全局文件 ..."
-    rsync -a --delete --exclude=media "${TMP_DIR}/open_paas/" "$PREFIX/open_paas/"
+    rsync -a --delete --exclude=media --exclude="components/generic/apis" "${TMP_DIR}/open_paas/" "$PREFIX/open_paas/"
 else
-    rsync -a --delete --exclude=media "${MODULE_SRC_DIR}/open_paas/" "$PREFIX/open_paas/"
+    rsync -a --delete --exclude=media --exclude="components/generic/apis" "${MODULE_SRC_DIR}/open_paas/" "$PREFIX/open_paas/"
 fi
 
 for m in "${UPDATE_MODULE[@]}"; do
