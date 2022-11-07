@@ -147,9 +147,13 @@ case $module in
         # 中控机安装模块
         pcmdrc "$LAN_IP" "get_service_status ${SERVICE[$module]}"
         ;;
-    bkiam|bkssm|bkiam_search_engine|bkauth)
+    bkssm|bkiam_search_engine|bkauth)
         target_name=${module#bk}
         pcmdrc "${target_name}" "get_service_status ${SERVICE[${target_name}]}"
+        ;;
+    bkiam)
+        target_name=${module#bk}
+        pcmdrc "${target_name}" "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh ^bk-iam"
         ;;
     apigw|bkapigw)
         target_name=${module#bk}

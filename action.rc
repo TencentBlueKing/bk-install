@@ -86,7 +86,7 @@ action_license () {
 
 action_iam () {
     local action=$1
-    systemctl ${action} bk-iam.service
+    systemctl ${action} bk-iam.target
 }
 
 action_iam_search_engine () {

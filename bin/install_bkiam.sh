@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 用途：安装和更新蓝鲸的bkiam，权限中心后台
-# 
+# checker: 整个环境下只能只有一个，worker：整个环境下不超过 9 个
+
 
 set -euo pipefail
 
@@ -14,6 +15,9 @@ PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
 
+# 默认部署模块
+MODULE=
+
 # 全局默认变量
 BIND_ADDR="127.0.0.1"
 ENV_FILE=
@@ -26,10 +30,11 @@ MODULE_SRC_DIR=/data/src
 
 usage () {
     cat <<EOF
-用法: 
+用法:
     $PROGRAM [ -h --help -?  查看帮助 ]
             [ -e, --envfile     [必填] "以该环境变量文件渲染配置" ]
             [ -b, --bind        [可选] "监听的网卡地址,默认为127.0.0.1" ]
+            [ -m, --module      [必填] "需要部署的模块"]
 
             [ -s, --srcdir      [必填] "从该目录拷贝bkiam/目录到--prefix指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
@@ -63,7 +68,7 @@ version () {
 
 # 解析命令行参数，长短混合模式
 (( $# == 0 )) && usage_and_exit 1
-while (( $# > 0 )); do 
+while (( $# > 0 )); do
     case "$1" in
         -b | --bind )
             shift
@@ -81,26 +86,30 @@ while (( $# > 0 )); do
             shift
             PREFIX=$1
             ;;
+        -m | --module)
+            shift
+            MODULE=$1
+            ;;
         -l | --log-dir )
             shift
             LOG_DIR=$1
-            ;; 
+            ;;
         --help | -h | '-?' )
             usage_and_exit 0
             ;;
         --version | -v | -V )
-            version 
+            version
             exit 0
             ;;
         -*)
             error "不可识别的参数: $1"
             ;;
-        *) 
+        *)
             break
             ;;
     esac
-    shift 
-done 
+    shift
+done
 
 LOG_DIR=${LOG_DIR:-$PREFIX/logs/bkiam}
 
@@ -117,10 +126,10 @@ fi
 
 # 安装用户和配置目录
 id -u blueking &>/dev/null || \
-    { echo "<blueking> user has not been created, please check ./bin/update_bk_env.sh"; exit 1; } 
+    { echo "<blueking> user has not been created, please check ./bin/update_bk_env.sh"; exit 1; }
 
 install -o blueking -g blueking -d "${LOG_DIR}"
-install -o blueking -g blueking -m 755 -d /etc/blueking/env 
+install -o blueking -g blueking -m 755 -d /etc/blueking/env
 
 # 拷贝模块目录到$PREFIX
 rsync -a "$MODULE_SRC_DIR/bkiam" "$PREFIX/" || error "安装模块(bkiam)失败"
@@ -130,12 +139,23 @@ chown -R blueking.blueking "$PREFIX/bkiam"
 "$SELF_DIR"/render_tpl -u -e "$ENV_FILE" -E LAN_IP="$BIND_ADDR" -m bkiam -p "$PREFIX" \
     "$MODULE_SRC_DIR/bkiam/support-files/templates/#etc#bkiam_config.yaml"
 
-# 生成service文件
-cat > /usr/lib/systemd/system/bk-iam.service <<EOF
+# 先生成bk-iam.target
+cat <<EOF > /usr/lib/systemd/system/bk-iam.target
 [Unit]
-Description="Blueking IAM Server"
+Description=Bk iam target to allow start/stop all bk-iam*.service at once
+
+[Install]
+WantedBy=multi-user.target blueking.target
+EOF
+
+# 生成service文件
+case $MODULE in
+    bk-iam)
+        cat > /usr/lib/systemd/system/bk-iam.service <<EOF
+[Unit]
+Description="Blueking iam server"
 After=network-online.target
-PartOf=blueking.target
+PartOf=bk-iam.target
 
 [Service]
 User=blueking
@@ -147,16 +167,88 @@ RestartSec=3s
 LimitNOFILE=204800
 
 [Install]
-WantedBy=multi-user.target blueking.target
+WantedBy= bk-iam.target
 EOF
+    ;;
+    bk-iam-worker)
+        cat > /usr/lib/systemd/system/bk-iam-worker@.service <<EOF
+[Unit]
+Description="Blueking iam %i server"
+After=network-online.target
+PartOf=bk-iam.target
+
+[Service]
+User=blueking
+Group=blueking
+ExecStart=$PREFIX/bkiam/bin/iam worker -c $PREFIX/etc/bkiam_config.yaml
+KillMode=process
+Restart=always
+RestartSec=3s
+LimitNOFILE=204800
+
+[Install]
+WantedBy=multi-user.target blueking.target bk-iam.target
+EOF
+    ;;
+    bk-iam-checker)
+        cat > /usr/lib/systemd/system/bk-iam-checker.service <<EOF
+[Unit]
+Description="Blueking iam checker server"
+After=network-online.target
+PartOf=bk-iam.target
+
+[Service]
+User=blueking
+Group=blueking
+ExecStart=$PREFIX/bkiam/bin/iam checker -c $PREFIX/etc/bkiam_config.yaml
+KillMode=process
+Restart=always
+RestartSec=3s
+LimitNOFILE=204800
+
+[Install]
+WantedBy=bk-iam.target
+EOF
+    ;;
+    bk-iam-transfer)
+        cat > /usr/lib/systemd/system/bk-iam-transfer.service <<EOF
+[Unit]
+Description="Blueking iam transfer server"
+After=network-online.target
+PartOf=bk-iam.target
+
+[Service]
+User=blueking
+Group=blueking
+ExecStart=$PREFIX/bkiam/bin/iam transfer -c $PREFIX/etc/bkiam_config.yaml
+KillMode=process
+Restart=always
+RestartSec=3s
+LimitNOFILE=204800
+
+[Install]
+WantedBy=bk-iam.target
+EOF
+    ;;
+
+esac
 
 systemctl daemon-reload
-if ! systemctl is-enabled "bk-iam" &>/dev/null; then
-    systemctl enable --now bk-iam
+systemctl enable bk-iam.target
+if [[ $MODULE == "bk-iam-worker" ]]; then
+    if ! systemctl is-enabled bk-iam-worker@{worker1,worker2,worker3} &>/dev/null; then
+        systemctl enable --now bk-iam-worker@{worker1,worker2,worker3}
+    else
+        systemctl start bk-iam-worker@{worker1,worker2,worker3}
+    fi
 else
-    systemctl start bk-iam
+    if ! systemctl is-enabled "$MODULE" &>/dev/null; then
+        systemctl enable --now "$MODULE"
+    else
+        systemctl start "$MODULE"
+    fi
 fi
 
 # 校验是否成功
 sleep 1
-systemctl status bk-iam
+systemctl status bk-iam*

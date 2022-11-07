@@ -509,18 +509,48 @@ install_cert () {
     "${SELF_DIR}"/pcmd.sh -m ALL "rsync -a ${BK_PKG_SRC_PATH}/cert/  ${INSTALL_PATH}/cert/ && chown blueking.blueking -R ${INSTALL_PATH}/cert/"
 }
 
-install_iam () { 
+install_iam () {
     local module=iam
     local target_name=$(map_module_name $module)
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
+
     emphasize "migrate $module sql"
     migrate_sql ${module}
+
+    for m in bk-iam bk-iam-worker bk-iam-checker bk-iam-transfer; do
+        case $m in
+            bk-iam)
+                emphasize "install bkiam($m) on host: ${BK_IAM_IP_COMMA}"
+                "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_bkiam.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -m $m -p ${INSTALL_PATH} -e ${CTRL_DIR}/bin/04-final/bkiam.env"
+                ;;
+            bk-iam-worker)
+                if [[ ${#BK_IAM_IP[@]} -gt 3 ]]; then
+                    bkiam_worker_list=$(awk '{print $1,$2,$3}' <<<${BK_IAM_IP[@]})
+                    emphasize "install bkiam($m) on host: ${bkiam_worker_list}"
+                    for ip in "${bkiam_worker_list[@]}"
+                    do
+
+                        "${SELF_DIR}"/pcmd.sh -H "$ip" "${CTRL_DIR}/bin/install_bkiam.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -m $m -p ${INSTALL_PATH} -e ${CTRL_DIR}/bin/04-final/bkiam.env"
+                    done
+                else
+                    "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_bkiam.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -m $m -p ${INSTALL_PATH} -e ${CTRL_DIR}/bin/04-final/bkiam.env"
+                fi
+                ;;
+            bk-iam-checker)
+                emphasize "install bkiam($m) on host: ${BK_IAM_IP0}"
+                "${SELF_DIR}"/pcmd.sh -H "$BK_IAM_IP0" "${CTRL_DIR}/bin/install_bkiam.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -m $m -p ${INSTALL_PATH} -e ${CTRL_DIR}/bin/04-final/bkiam.env"
+                ;;
+            bk-iam-transfer)
+                emphasize "install bkiam($m) on host: ${BK_IAM_IP0}"
+                "${SELF_DIR}"/pcmd.sh -H "$BK_IAM_IP0" "${CTRL_DIR}/bin/install_bkiam.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -m $m -p ${INSTALL_PATH} -e ${CTRL_DIR}/bin/04-final/bkiam.env"
+                ;;
+        esac
+    done
+
     for project in ${_projects[@]}; do
-        emphasize "install ${target_name}-${project} on host: ${BK_IAM_IP_COMMA}"
+        emphasize "register  ${consul} consul server  on host: ${BK_IAM_IP_COMMA}"
         local port=${_project_port["${target_name},${project}"]}
         local consul=${_project_consul["${target_name},${project}"]}
-        "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_bkiam.sh -b \$LAN_IP -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -e '${CTRL_DIR}/bin/04-final/bkiam.env'"
-        emphasize "register  ${consul} consul server  on host: ${BK_IAM_IP_COMMA}"
         reg_consul_svc "${consul}" "${port}" "${BK_IAM_IP_COMMA}"
     done
 
