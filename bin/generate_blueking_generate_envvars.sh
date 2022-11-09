@@ -360,8 +360,8 @@ case $1 in
             source "$SELF_DIR"/01-generate/dbadmin.env
             printf "%s=%q\n" "BK_IAM_SEARCH_ENGINE_ES7_PASSWORD" "$BK_ES7_ADMIN_PASSWORD"
         fi
-        if [[ -z "$BK_IAM_SAAS_REDIS_PASSWORD" ]]; then
-            gen_redis_password "BK_IAM_SAAS" "${redis_pwd}"
+        if [[ -z "$BK_IAM_REDIS_SENTINEL_PASSWORD" ]]; then
+            printf "%s=%q\n" "BK_IAM_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
         fi
         ;;
     bknodeman)

@@ -147,9 +147,13 @@ case $module in
         # 中控机安装模块
         pcmdrc "$LAN_IP" "get_service_status ${SERVICE[$module]}"
         ;;
-    bkssm|bkiam_search_engine|bkauth)
+    bkssm|bkauth)
         target_name=${module#bk}
         pcmdrc "${target_name}" "get_service_status ${SERVICE[${target_name}]}"
+        ;;
+    bkiam_search_engine|iam_search_engine)
+        target_name=${module#bk}
+        pcmdrc "${target_name}" "get_service_status ${SERVICE[${target_name}]} ${SERVICE[${target_name}]}-rbac"
         ;;
     bkiam)
         target_name=${module#bk}

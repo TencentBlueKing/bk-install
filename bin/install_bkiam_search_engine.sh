@@ -136,6 +136,11 @@ chown -R blueking.blueking "$PREFIX/bkiam_search_engine"
 "$SELF_DIR"/render_tpl -u -e "$ENV_FILE" -E LAN_IP="$BIND_ADDR" -m bkiam_search_engine -p "$PREFIX" \
     "$MODULE_SRC_DIR/bkiam_search_engine/support-files/templates/#etc#bkiam_search_engine_config.yaml"
 
+cat > /etc/sysconfig/bk-iam-search-engine-rbac <<EOF
+INSTANCE_TYPE=rbac
+DISABLE_HTTP=true
+EOF
+
 # 生成service文件
 cat > /usr/lib/systemd/system/bk-iam-search-engine.service <<EOF
 [Unit]
@@ -156,6 +161,26 @@ LimitNOFILE=204800
 WantedBy=multi-user.target blueking.target
 EOF
 
+cat > /usr/lib/systemd/system/bk-iam-search-engine-rbac.service <<EOF
+[Unit]
+Description="Blueking IAM Engine Rbac Server"
+After=network-online.target
+PartOf=blueking.target
+
+[Service]
+User=blueking
+Group=blueking
+EnvironmentFile=/etc/sysconfig/bk-iam-search-engine-rbac
+ExecStart=$PREFIX/bkiam_search_engine/bin/iam-search-engine -c $PREFIX/etc/bkiam_search_engine_config.yaml
+KillMode=process
+Restart=always
+RestartSec=3s
+LimitNOFILE=204800
+
+[Install]
+WantedBy=multi-user.target blueking.target
+EOF
+
 systemctl daemon-reload
 if ! systemctl is-enabled "bk-iam-search-engine" &>/dev/null; then
     systemctl enable --now bk-iam-search-engine
@@ -163,6 +188,13 @@ else
     systemctl start bk-iam-search-engine
 fi
 
+if ! systemctl is-enabled "bk-iam-search-engine-rbac" &>/dev/null; then
+    systemctl enable --now bk-iam-search-engine-rbac
+else
+    systemctl start bk-iam-search-engine-rbac
+fi
+
 # 校验是否成功
 sleep 1
 systemctl status bk-iam-search-engine
+systemctl status bk-iam-search-engine-rbac

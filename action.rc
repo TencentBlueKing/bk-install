@@ -92,6 +92,7 @@ action_iam () {
 action_iam_search_engine () {
     local action=$1
     systemctl ${action} bk-iam-search-engine.service
+    systemctl ${action} bk-iam-search-engine-rbac.service
 }
 
 action_ssm () {
