@@ -2,119 +2,852 @@
 # Description: 安装前配置域名和目录
 
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-DEFAULT_BK_HOME=
-DEFAULT_BK_DOMAIN=
-DEFAULT_ENV=$SELF_DIR/bin/default/global.env
-USERDEF_ENV=${SELF_DIR}/bin/03-userdef/global.env
 
-# get default value
-if [[ -s $DEFAULT_ENV ]]; then
-    . "$DEFAULT_ENV"
-    if [[ -z $BK_HOME || -z $BK_DOMAIN ]]; then
-        echo "BK_HOME or BK_DOMAIN is empty in $DEFAULT_ENV"
-        exit 1
-    else
-        DEFAULT_BK_HOME=$BK_HOME
-        DEFAULT_BK_DOMAIN=$BK_DOMAIN
-    fi
-else
-    echo "$DEFAULT_ENV is empty"
-    exit 1
-fi
+red_echo ()      { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[031;1m$@\033[0m"; }
+green_echo ()    { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[032;1m$@\033[0m"; }
+yellow_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[033;1m$@\033[0m"; }
+blue_echo ()     { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[034;1m$@\033[0m"; }
+purple_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[035;1m$@\033[0m"; }
+bred_echo ()     { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[041;1m$@\033[0m"; }
+bgreen_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[042;1m$@\033[0m"; }
+byellow_echo ()  { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[043;1m$@\033[0m"; }
+bblue_echo ()    { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[044;1m$@\033[0m"; }
+bpurple_echo ()  { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[045;1m$@\033[0m"; }
+bgreen_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[042;34;1m$@\033[0m"; }
 
-change_bk_domain () {
-    local old_domain=$1
-    local new_domain=$2
-    local new_domain_env new_domain_env_keys
-    # BK_DOMAIN 不能是顶级域名，没有\.字符时
-    if ! [[ $new_domain =~ \. ]]; then
-        echo "BK_DOMAIN不应该是顶级域名，请配置二级域名或者以上"
-        exit 1
-    fi
-    new_domain_env=$(grep -w "$old_domain" "$DEFAULT_ENV" | sed "s/$old_domain/$new_domain/")
-    new_domain_env_keys=( $(awk -F= '{print $1}' <<<"$new_domain_env") )
-    
-    if [[ ${#new_domain_env_keys[@]} -lt 13 ]]; then
-        echo "generate new domain env variables failed"
-        exit 1
-    fi 
-    
-    if [[ -f $USERDEF_ENV ]]; then
-        cp -a ${SELF_DIR}/bin/03-userdef/{global.env,global.env_$(date +%Y%m%d_%H%M%S)}
-        # delete same keys already exists in global.env
-        for k in "${new_domain_env_keys[@]}"; do 
-            sed -i "/^${k}=/d" "$USERDEF_ENV"
-        done
-    fi
-    # append new env keys
-    echo "$new_domain_env" >> "$USERDEF_ENV"
+export CUSTOM_BK_DOMAIN=
+export CUSTOM_PATH=
+export CUSTOM_SCHEMA=
+export CUSTOM_PORT=
+export CUSTOM_INTRA_PORT=
+export CUSTOM_PAAS_PREFIX=
+export CUSTOM_CMDB_PREFIX=
+export CUSTOM_JOB_PREFIX=
+export CUSTOM_JOBAPI_PREFIX=
+export CUSTOM_NODEMAN_PREFIX=
+export CUSTOM_ADMIN_PASSWORD=
+
+DEFAULT_BK_DOMAIN="bk.default.com"
+DEFAULT_PATH="/data/bkce"
+DEFAULT_SCHEMA="http"
+DEFAULT_PORT=80
+DEFAULT_INTRA_PORT=80
+DEFAULT_PAAS_PREFIX="paas"
+DEFAULT_CMDB_PREFIX="cmdb"
+DEFAULT_JOB_PREFIX="job"
+DEFAULT_JOBAPI_PREFIX="jobapi"
+DEFAULT_NODEMAN_PREFIX="nodeman"
+DEFAULT_ADMIN_PASSWORD="Blue@King2022"
+
+
+function backup() {
+   if [[ -f  ${SELF_DIR}/bin/03-userdef/global.env ]];
+   then
+     backupdata=$(date +'%Y%m%d_%H%M%S')
+     yellow_echo "发现已存在的 global.env, 已备份到 ${SELF_DIR}/bin/99-backup/global.env-${backupdata}"
+     cp ${SELF_DIR}/bin/03-userdef/global.env ${SELF_DIR}/bin/99-backup/global.env-${backupdata}
+   fi
 }
 
-change_bk_home () {
-    local new_home=${1%/} # strip last trailling / 
-    if [[ -s $SELF_DIR/.path ]]; then
-        echo "WARNING: $SELF_DIR/.path already exists, will not change BK_HOME BK_CERT_PATH"
-        return 1
-    fi
-    if ! [[ ${new_home} =~ ^/[a-zA-Z0-9_]+ ]]; then
-        echo "ERROR: BK_HOME should be a valid unix path meet regex ^/[a-zA-Z0-9_]+ pattern"
-        return 1
-    fi
-    if [[ -f ${SELF_DIR}/bin/03-userdef/global.env ]]; then
-        cp -a ${SELF_DIR}/bin/03-userdef/{global.env,global.env_$(date +%Y%m%d_%H%M%S)}
-        # delete same keys already exists in global.env
-        sed -i "/^BK_HOME=/d" "$USERDEF_ENV"
-        sed -i "/^BK_CERT_PATH=/d" "$USERDEF_ENV"
-    fi
-    # append new env keys
-    echo "BK_HOME=$new_home" >> "$USERDEF_ENV"
-    echo "BK_CERT_PATH=$new_home/cert" >> "$USERDEF_ENV"
-    # place .path
-    echo "$new_home" > $SELF_DIR/.path
+function pre_init_nginx_ssl() {
+    local paasprefix=$1
+    local cmdbprefix=$2
+    local jobprefix=$3
+    local jobapiprefix=$4
+    local nodemanprefix=$5
+    local domain=$6
+    mkdir ${SELF_DIR}/ssl/ 2>/dev/null
+    cat > ${SELF_DIR}/ssl/openssl.conf <<EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+
+[req_distinguished_name]
+countryName = CN
+countryName_default = CN
+stateOrProvinceName = Shanghai
+stateOrProvinceName_default = Shanghai
+localityName = China
+localityName_default = China
+organizationalUnitName  = Blueking
+organizationalUnitName_default  = Blueking
+commonName = *.${domain}
+commonName_max  = 64
+
+[ v3_req ]
+# Extensions to add to a certificate request
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${paasprefix}.${domain}
+DNS.2 = ${cmdbprefix}.${domain}
+DNS.3 = ${jobprefix}.${domain}
+DNS.4 = ${jobapiprefix}.${domain}
+DNS.5 = ${nodemanprefix}.${domain}
+DNS.6 = paas.service.consul
+DNS.7 = cmdb.service.consul
+DNS.8 = job.service.consul
+EOF
+
+        openssl genrsa -out ${SELF_DIR}/ssl/server.key 2048 2>&1 >/dev/null
+        openssl req -new -out ${SELF_DIR}/ssl/server.csr -key ${SELF_DIR}/ssl/server.key -config ${SELF_DIR}/ssl/openssl.conf -subj "/C=CN/ST=Shanghai/L=China/OU=Blueking" 2>&1 >/dev/null
+        openssl x509 -req -days 3650 \
+                        -in ${SELF_DIR}/ssl/server.csr \
+                        -signkey ${SELF_DIR}/ssl/server.key \
+                        -out ${SELF_DIR}/ssl/server.crt \
+                        -extensions v3_req \
+                        -extfile ${SELF_DIR}/ssl/openssl.conf 2>&1 >/dev/null
+
+        # cp -f ${SELF_DIR}/ssl/server.key ${INSPATH_FOR_BK}/src/cert/bk_domain.key
+        # cp -f ${SELF_DIR}/ssl/server.crt ${INSPATH_FOR_BK}/src/cert/bk_domain.crt
 }
+
 
 usage () {
     cat <<EOF
-用法: 
-    ./configure [ -h --help -?  查看帮助 ]
+用法:
+    ./configure
+            [ -h --help -?       查看帮助 ]
+            [ -T --test         [可选] "快速生成默认配置，快速部署测试时使用"]
             [ -d, --domain      [可选] "配置安装蓝鲸的域名(BK_HOME变量)，默认为 $DEFAULT_BK_DOMAIN" ]
-            [ -p, --prefix      [可选] "配置安装蓝鲸的目标路径，默认为 $DEFAULT_BK_HOME" ]
+            [ -p, --path        [可选] "配置安装蓝鲸的目标路径，默认为 $DEFAULT_PATH" ]
+            [ -s, --schema      [可选] "配置蓝鲸的访问协议，默认为 $DEFAULT_SCHEMA" ]
+            [ -P, --port        [可选] "配置蓝鲸的访问端口，默认为 $DEFAULT_PORT" ]
+            [ --paas-prefix     [可选] "配置蓝鲸paas的前缀，默认为 $DEFAULT_PAAS_PREFIX" ]
+            [ --cmdb-prefix     [可选] "配置蓝鲸cmdb的前缀，默认为 $DEFAULT_CMDB_PREFIX" ]
+            [ --job-prefix      [可选] "配置蓝鲸job的前缀，默认为 $DEFAULT_JOB_PREFIX" ]
+            [ --jobapi-prefix   [可选] "配置蓝鲸jobapi的前缀，默认为 $DEFAULT_JOBAPI_PREFIX" ]
+            [ --nodeman-prefix  [可选] "配置蓝鲸nodeman的前缀，默认为 $DEFAULT_NODEMAN_PREFIX" ]
+            [ --admin-password  [可选] "配置蓝鲸页面的初始密码，默认为 $DEFAULT_ADMIN_PASSWORD" ]
 EOF
 }
 
 (( $# == 0 )) && usage && exit 1
-while (( $# > 0 )); do 
+while (( $# > 0 )); do
     case "$1" in
+        -T | --test )
+            shift
+            NEW_DOMAIN=${DEFAULT_BK_DOMAIN}
+            NEW_BK_HOME=${DEFAULT_PATH}
+            NEW_SCHEMA=${DEFAULT_SCHEMA}
+            NEW_PORT=${DEFAULT_PORT}
+            NEW_INTRA_PORT=${DEFAULT_INTRA_PORT}
+            NEW_PAAS_PREFIX=${DEFAULT_PAAS_PREFIX}
+            NEW_CMDB_PREFIX=${DEFAULT_CMDB_PREFIX}
+            NEW_JOB_PREFIX=${DEFAULT_JOB_PREFIX}
+            NEW_JOBAPI_PREFIX=${DEFAULT_JOBAPI_PREFIX}
+            NEW_NODEMAN_PREFIX=${DEFAULT_NODEMAN_PREFIX}
+            ;;
         -d | --domain )
             shift
             NEW_DOMAIN=$1
             ;;
-        -p | --prefix )
+        -p | --path )
             shift
             NEW_BK_HOME=$1
             ;;
-        -*)
-            error "不可识别的参数: $1"
+        -s | --schema )
+            shift
+            NEW_SCHEMA=$1
             ;;
-        *) 
+        -P | --port )
+            shift
+            NEW_PORT=$1
+            ;;
+        --paas-prefix )
+            shift
+            NEW_PAAS_PREFIX=$1
+            ;;
+        --cmdb-prefix )
+            shift
+            NEW_CMDB_PREFIX=$1
+            ;;
+        --job-prefix )
+            shift
+            NEW_JOB_PREFIX=$1
+            ;;
+        --jobapi-prefix )
+            shift
+            NEW_JOBAPI_PREFIX=$1
+            ;;
+        --nodeman-prefix )
+            shift
+            NEW_NODEMAN_PREFIX=$1
+            ;;
+        --admin-password )
+            shift
+            NEW_ADMIN_PASSWORD=$1
+            ;;
+        -h | --help |-?|? )
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "不可识别的参数: $1"
+            exit 1
+            ;;
+        *)
             break
             ;;
     esac
-    shift 
-done 
+    shift
+done
 
-if [[ -n $NEW_DOMAIN ]]; then
-    echo "change BK_DOMAIN related varibales in $USERDEF_ENV"
-    change_bk_domain "$DEFAULT_BK_DOMAIN" "$NEW_DOMAIN"
+
+if [ -f .inited_global ]; then
+    read -p "检测到已初始化过 global.env，是否需要覆盖？[y/N]" reply
+    if [ "$reply" != "y" ]; then
+        red_echo "已退出."
+        exit 1
+    else
+        touch .inited_global
+    fi
 fi
-if [[ -n $NEW_BK_HOME ]]; then
-    echo "change BK_HOME BK_CERT_PATH variables in $USERDEF_ENV"
-    change_bk_home "$NEW_BK_HOME"
+
+
+
+backup
+
+cat > ${SELF_DIR}/bin/03-userdef/global.env <<EOF
+# Rende with script [configure] at $(date +'%Y%m%d_%H%M%S')
+
+INSTALL_PATH="__INSTALL_PATH__"
+BK_DOMAIN="__DOMAIN__"
+BK_HTTP_SCHEMA="__SCHEMA__"
+BK_HOME=__INSTALL_PATH__
+BK_CERT_PATH=__INSTALL_PATH__/cert
+#BK_HTTP_DEFAULT_PORT=__PORT__
+#BK_HTTPS_PORT=__PORT__
+
+# PaaS
+BK_PAAS_PREFIX="__PAAS_PREFIX__"
+BK_PAAS_PUBLIC_ADDR="__PAAS_PREFIX__.__DOMAIN__:__PORT__"
+BK_PAAS_PUBLIC_URL="__SCHEMA__://__PAAS_PREFIX__.__DOMAIN__:__PORT__"
+BK_PAAS_PRIVATE_ADDR="paas.service.consul:__INTRA_PORT__"
+BK_PAAS_PRIVATE_URL="http://paas.service.consul:__INTRA_PORT__"
+
+# CMDB
+BK_CMDB_PREFIX="__CMDB_PREFIX__"
+BK_CMDB_PUBLIC_ADDR="__CMDB_PREFIX__.__DOMAIN__:__PORT__"
+BK_CMDB_PUBLIC_URL="__SCHEMA__://__CMDB_PREFIX__.__DOMAIN__:__PORT__"
+BK_CMDB_PRIVATE_ADDR="cmdb.service.consul:__INTRA_PORT__"
+BK_CMDB_PRIVATE_URL="http://cmdb.service.consul:__INTRA_PORT__"
+
+# Job
+BK_JOB_PREFIX="__JOB_PREFIX__"
+BK_JOB_API_PREFIX="__JOBAPI_PREFIX__"
+BK_JOB_PUBLIC_ADDR="__JOB_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_PUBLIC_URL="__SCHEMA__://__JOB_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_API_PUBLIC_ADDR="__JOBAPI_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_API_PUBLIC_URL="__SCHEMA__://__JOBAPI_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_PRIVATE_ADDR="job.service.consul:__INTRA_PORT__"
+BK_JOB_PRIVATE_URL="http://job.service.consul:__INTRA_PORT__"
+
+# Nodeman
+BK_NODEMAN_PREFIX="__NODEMAN_PREFIX__"
+BK_NODEMAN_PUBLIC_DOWNLOAD_URL="http://__NODEMAN_PREFIX__.__DOMAIN__:__PORT__"
+
+# Password
+BK_PAAS_ADMIN_PASSWORD="__ADMIN_PASSWORD__"
+
+EOF
+
+
+# 参数校验
+
+# 校验域名
+if [[ -n $NEW_DOMAIN ]];
+then
+  CUSTOM_BK_DOMAIN=$NEW_DOMAIN
+else
+  CUSTOM_BK_DOMAIN=$DEFAULT_BK_DOMAIN
 fi
-if [[ -s $USERDEF_ENV ]]; then
-    echo 
-    echo "Preview of your user defined variables:"
-    echo "-----------------------------------------"
-    cat "$USERDEF_ENV"
-    echo "-----------------------------------------"
+
+if [[ "$(echo $CUSTOM_BK_DOMAIN|grep -oP '(\w{1,}\.){1,}\w{1,}')" == "" ]];
+then
+  red_echo "$CUSTOM_BK_DOMAIN 根域名不合法，请使用至少二级域名，如 bk.com"
+  exit 1
 fi
+
+# 校验安装路径
+if [[ -n $NEW_BK_HOME ]];
+then
+  CUSTOM_BK_HOME=$NEW_BK_HOME
+else
+  CUSTOM_BK_HOME=$DEFAULT_PATH
+fi
+
+if [[ "$(echo $CUSTOM_BK_HOME | grep -oP '^\/.*[^\/]$')" == "" ]];
+then
+  red_echo "$CUSTOM_BK_HOME 路径不合法，请使用正常的 linux 路径(结尾不带/)"
+  exit 1
+fi
+
+# 校验访问协议
+if [[ -n $NEW_SCHEMA ]];
+then
+  CUSTOM_SCHEMA=$NEW_SCHEMA
+else
+  CUSTOM_SCHEMA=$DEFAULT_SCHEMA
+fi
+
+if [[ "$(echo $CUSTOM_SCHEMA |grep -oP '^http$|^https$')" == "" ]] ;
+then
+  red_echo "$CUSTOM_SCHEMA 不合法，请使用 http 或 https"
+  exit 1
+fi
+
+# 校验端口
+if [[ -n $NEW_PORT ]];
+then
+  CUSTOM_PORT=$NEW_PORT
+else
+  CUSTOM_PORT=$DEFAULT_PORT
+fi
+
+if [[ "$(echo $CUSTOM_PORT | grep -oP '^\d{1,}$')" == "" ]];
+then
+  red_echo "$CUSTOM_PORT 不合法，请使用纯数字"
+  exit 1
+fi
+
+if [[ -n $NEW_INTRA_PORT ]];
+then
+  CUSTOM_INTRA_PORT=$NEW_INTRA_PORT
+else
+  CUSTOM_INTRA_PORT=$DEFAULT_INTRA_PORT
+fi
+
+if [[ "$(echo $CUSTOM_INTRA_PORT | grep -oP '^\d{1,}$')" == "" ]];
+then
+  red_echo "$CUSTOM_INTRA_PORT 不合法，请使用纯数字"
+  exit 1
+fi
+
+# 校验域名前缀
+if [[ -n $NEW_PAAS_PREFIX ]];
+then
+  CUSTOM_PAAS_PREFIX=$NEW_PAAS_PREFIX
+else
+  CUSTOM_PAAS_PREFIX=$DEFAULT_PAAS_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_PAAS_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_PAAS_PREFIX 不合法"
+  exit 1
+fi
+
+
+if [[ -n $NEW_CMDB_PREFIX ]];
+then
+  CUSTOM_CMDB_PREFIX=$NEW_CMDB_PREFIX
+else
+  CUSTOM_CMDB_PREFIX=$DEFAULT_CMDB_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_CMDB_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_CMDB_PREFIX 不合法"
+  exit 1
+fi
+
+
+if [[ -n $NEW_JOB_PREFIX ]];
+then
+  CUSTOM_JOB_PREFIX=$NEW_JOB_PREFIX
+else
+  CUSTOM_JOB_PREFIX=$DEFAULT_JOB_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_JOB_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_JOB_PREFIX 不合法"
+  exit 1
+fi
+
+if [[ -n $NEW_JOBAPI_PREFIX ]];
+then
+  CUSTOM_JOBAPI_PREFIX=$NEW_JOBAPI_PREFIX
+else
+  CUSTOM_JOBAPI_PREFIX=$DEFAULT_JOBAPI_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_JOBAPI_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_JOBAPI_PREFIX 不合法"
+  exit 1
+fi
+
+if [[ -n $NEW_NODEMAN_PREFIX ]];
+then
+  CUSTOM_NODEMAN_PREFIX=$NEW_NODEMAN_PREFIX
+else
+  CUSTOM_NODEMAN_PREFIX=$DEFAULT_NODEMAN_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_NODEMAN_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_NODEMAN_PREFIX 不合法"
+  exit 1
+fi
+
+if [[ -n $NEW_ADMIN_PASSWORD ]];
+then
+  CUSTOM_ADMIN_PASSWORD=$NEW_ADMIN_PASSWORD
+else
+  CUSTOM_ADMIN_PASSWORD=$DEFAULT_ADMIN_PASSWORD
+fi
+
+sed -i "s#__INSTALL_PATH__#${CUSTOM_BK_HOME}#g; \
+        s#__DOMAIN__#${CUSTOM_BK_DOMAIN}#g; \
+        s#__SCHEMA__#${CUSTOM_SCHEMA}#g; \
+        s#__PORT__#${CUSTOM_PORT}#g; \
+        s#__INTRA_PORT__#${CUSTOM_INTRA_PORT}#g; \
+        s#__PAAS_PREFIX__#${CUSTOM_PAAS_PREFIX}#g; \
+        s#__CMDB_PREFIX__#${CUSTOM_CMDB_PREFIX}#g; \
+        s#__JOB_PREFIX__#${CUSTOM_JOB_PREFIX}#g; \
+        s#__JOBAPI_PREFIX__#${CUSTOM_JOBAPI_PREFIX}#g; \
+        s#__ADMIN_PASSWORD__#${CUSTOM_ADMIN_PASSWORD}#g; \
+        s#__NODEMAN_PREFIX__#${CUSTOM_NODEMAN_PREFIX}#g" ${SELF_DIR}/bin/03-userdef/global.env
+
+
+if [[ "$CUSTOM_SCHEMA" == "https" ]];
+then
+    pre_init_nginx_ssl ${CUSTOM_PAAS_PREFIX} ${CUSTOM_CMDB_PREFIX} ${CUSTOM_JOB_PREFIX} ${CUSTOM_JOBAPI_PREFIX} ${CUSTOM_NODEMAN_PREFIX} ${CUSTOM_BK_DOMAIN}
+fi
+
+green_echo "-------------- 新 global.env --------------"
+cat ${SELF_DIR}/bin/03-userdef/global.env
+green_echo "-------------------------------------------"
+yellow_echo "请继续使用 ./bkcli install bkenv 和 ./bkcli sync common 使其生效。"
+
+[root@10_11_25_51 install]# vim configure
+[root@10_11_25_51 install]# cat configure
+#!/usr/bin/env bash
+# Description: 安装前配置域名和目录
+
+SELF_DIR=$(dirname "$(readlink -f "$0")")
+
+red_echo ()      { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[031;1m$@\033[0m"; }
+green_echo ()    { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[032;1m$@\033[0m"; }
+yellow_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[033;1m$@\033[0m"; }
+blue_echo ()     { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[034;1m$@\033[0m"; }
+purple_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[035;1m$@\033[0m"; }
+bred_echo ()     { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[041;1m$@\033[0m"; }
+bgreen_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[042;1m$@\033[0m"; }
+byellow_echo ()  { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[043;1m$@\033[0m"; }
+bblue_echo ()    { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[044;1m$@\033[0m"; }
+bpurple_echo ()  { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[045;1m$@\033[0m"; }
+bgreen_echo ()   { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[042;34;1m$@\033[0m"; }
+
+export CUSTOM_BK_DOMAIN=
+export CUSTOM_PATH=
+export CUSTOM_SCHEMA=
+export CUSTOM_PORT=
+export CUSTOM_INTRA_PORT=
+export CUSTOM_PAAS_PREFIX=
+export CUSTOM_CMDB_PREFIX=
+export CUSTOM_JOB_PREFIX=
+export CUSTOM_JOBAPI_PREFIX=
+export CUSTOM_NODEMAN_PREFIX=
+export CUSTOM_ADMIN_PASSWORD=
+
+DEFAULT_BK_DOMAIN="bk.default.com"
+DEFAULT_PATH="/data/bkee"
+DEFAULT_SCHEMA="http"
+DEFAULT_PORT=80
+DEFAULT_INTRA_PORT=80
+DEFAULT_PAAS_PREFIX="paas"
+DEFAULT_CMDB_PREFIX="cmdb"
+DEFAULT_JOB_PREFIX="job"
+DEFAULT_JOBAPI_PREFIX="jobapi"
+DEFAULT_NODEMAN_PREFIX="nodeman"
+DEFAULT_ADMIN_PASSWORD="Blue@King2022"
+
+
+function backup() {
+   if [[ -f  ${SELF_DIR}/bin/03-userdef/global.env ]];
+   then
+     backupdata=$(date +'%Y%m%d_%H%M%S')
+     yellow_echo "发现已存在的 global.env, 已备份到 ${SELF_DIR}/bin/99-backup/global.env-${backupdata}"
+     cp ${SELF_DIR}/bin/03-userdef/global.env ${SELF_DIR}/bin/99-backup/global.env-${backupdata}
+   fi
+}
+
+function pre_init_nginx_ssl() {
+    local paasprefix=$1
+    local cmdbprefix=$2
+    local jobprefix=$3
+    local jobapiprefix=$4
+    local nodemanprefix=$5
+    local domain=$6
+    mkdir ${SELF_DIR}/ssl/ 2>/dev/null
+    cat > ${SELF_DIR}/ssl/openssl.conf <<EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+
+[req_distinguished_name]
+countryName = CN
+countryName_default = CN
+stateOrProvinceName = Shanghai
+stateOrProvinceName_default = Shanghai
+localityName = China
+localityName_default = China
+organizationalUnitName  = Blueking
+organizationalUnitName_default  = Blueking
+commonName = *.${domain}
+commonName_max  = 64
+
+[ v3_req ]
+# Extensions to add to a certificate request
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${paasprefix}.${domain}
+DNS.2 = ${cmdbprefix}.${domain}
+DNS.3 = ${jobprefix}.${domain}
+DNS.4 = ${jobapiprefix}.${domain}
+DNS.5 = ${nodemanprefix}.${domain}
+DNS.6 = paas.service.consul
+DNS.7 = cmdb.service.consul
+DNS.8 = job.service.consul
+EOF
+
+        openssl genrsa -out ${SELF_DIR}/ssl/server.key 2048 2>&1 >/dev/null
+        openssl req -new -out ${SELF_DIR}/ssl/server.csr -key ${SELF_DIR}/ssl/server.key -config ${SELF_DIR}/ssl/openssl.conf -subj "/C=CN/ST=Shanghai/L=China/OU=Blueking" 2>&1 >/dev/null
+        openssl x509 -req -days 3650 \
+                        -in ${SELF_DIR}/ssl/server.csr \
+                        -signkey ${SELF_DIR}/ssl/server.key \
+                        -out ${SELF_DIR}/ssl/server.crt \
+                        -extensions v3_req \
+                        -extfile ${SELF_DIR}/ssl/openssl.conf 2>&1 >/dev/null
+
+        # cp -f ${SELF_DIR}/ssl/server.key ${INSPATH_FOR_BK}/src/cert/bk_domain.key
+        # cp -f ${SELF_DIR}/ssl/server.crt ${INSPATH_FOR_BK}/src/cert/bk_domain.crt
+}
+
+
+usage () {
+    cat <<EOF
+用法:
+    ./configure
+            [ -h --help -?       查看帮助 ]
+            [ -T --test         [可选] "快速生成默认配置，快速部署测试时使用"]
+            [ -d, --domain      [可选] "配置安装蓝鲸的域名(BK_HOME变量)，默认为 $DEFAULT_BK_DOMAIN" ]
+            [ -p, --path        [可选] "配置安装蓝鲸的目标路径，默认为 $DEFAULT_PATH" ]
+            [ -s, --schema      [可选] "配置蓝鲸的访问协议，默认为 $DEFAULT_SCHEMA" ]
+            [ -P, --port        [可选] "配置蓝鲸的访问端口，默认为 $DEFAULT_PORT" ]
+            [ --paas-prefix     [可选] "配置蓝鲸paas的前缀，默认为 $DEFAULT_PAAS_PREFIX" ]
+            [ --cmdb-prefix     [可选] "配置蓝鲸cmdb的前缀，默认为 $DEFAULT_CMDB_PREFIX" ]
+            [ --job-prefix      [可选] "配置蓝鲸job的前缀，默认为 $DEFAULT_JOB_PREFIX" ]
+            [ --jobapi-prefix   [可选] "配置蓝鲸jobapi的前缀，默认为 $DEFAULT_JOBAPI_PREFIX" ]
+            [ --nodeman-prefix  [可选] "配置蓝鲸nodeman的前缀，默认为 $DEFAULT_NODEMAN_PREFIX" ]
+            [ --admin-password  [可选] "配置蓝鲸页面的初始密码，默认为 $DEFAULT_ADMIN_PASSWORD" ]
+EOF
+}
+
+(( $# == 0 )) && usage && exit 1
+while (( $# > 0 )); do
+    case "$1" in
+        -T | --test )
+            shift
+            NEW_DOMAIN=${DEFAULT_BK_DOMAIN}
+            NEW_BK_HOME=${DEFAULT_PATH}
+            NEW_SCHEMA=${DEFAULT_SCHEMA}
+            NEW_PORT=${DEFAULT_PORT}
+            NEW_INTRA_PORT=${DEFAULT_INTRA_PORT}
+            NEW_PAAS_PREFIX=${DEFAULT_PAAS_PREFIX}
+            NEW_CMDB_PREFIX=${DEFAULT_CMDB_PREFIX}
+            NEW_JOB_PREFIX=${DEFAULT_JOB_PREFIX}
+            NEW_JOBAPI_PREFIX=${DEFAULT_JOBAPI_PREFIX}
+            NEW_NODEMAN_PREFIX=${DEFAULT_NODEMAN_PREFIX}
+            ;;
+        -d | --domain )
+            shift
+            NEW_DOMAIN=$1
+            ;;
+        -p | --path )
+            shift
+            NEW_BK_HOME=$1
+            ;;
+        -s | --schema )
+            shift
+            NEW_SCHEMA=$1
+            ;;
+        -P | --port )
+            shift
+            NEW_PORT=$1
+            ;;
+        --paas-prefix )
+            shift
+            NEW_PAAS_PREFIX=$1
+            ;;
+        --cmdb-prefix )
+            shift
+            NEW_CMDB_PREFIX=$1
+            ;;
+        --job-prefix )
+            shift
+            NEW_JOB_PREFIX=$1
+            ;;
+        --jobapi-prefix )
+            shift
+            NEW_JOBAPI_PREFIX=$1
+            ;;
+        --nodeman-prefix )
+            shift
+            NEW_NODEMAN_PREFIX=$1
+            ;;
+        --admin-password )
+            shift
+            NEW_ADMIN_PASSWORD=$1
+            ;;
+        -h | --help |-?|? )
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "不可识别的参数: $1"
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+    shift
+done
+
+
+if [ -f .inited_global ]; then
+    read -p "检测到已初始化过 global.env，是否需要覆盖？[y/N]" reply
+    if [ "$reply" != "y" ]; then
+        red_echo "已退出."
+        exit 1
+    else
+        touch .inited_global
+    fi
+fi
+
+
+
+backup
+
+cat > ${SELF_DIR}/bin/03-userdef/global.env <<EOF
+# Rende with script [configure] at $(date +'%Y%m%d_%H%M%S')
+
+INSTALL_PATH="__INSTALL_PATH__"
+BK_DOMAIN="__DOMAIN__"
+BK_HTTP_SCHEMA="__SCHEMA__"
+BK_HOME=__INSTALL_PATH__
+BK_CERT_PATH=__INSTALL_PATH__/cert
+#BK_HTTP_DEFAULT_PORT=__PORT__
+#BK_HTTPS_PORT=__PORT__
+
+# PaaS
+BK_PAAS_PREFIX="__PAAS_PREFIX__"
+BK_PAAS_PUBLIC_ADDR="__PAAS_PREFIX__.__DOMAIN__:__PORT__"
+BK_PAAS_PUBLIC_URL="__SCHEMA__://__PAAS_PREFIX__.__DOMAIN__:__PORT__"
+BK_PAAS_PRIVATE_ADDR="paas.service.consul:__INTRA_PORT__"
+BK_PAAS_PRIVATE_URL="http://paas.service.consul:__INTRA_PORT__"
+
+# CMDB
+BK_CMDB_PREFIX="__CMDB_PREFIX__"
+BK_CMDB_PUBLIC_ADDR="__CMDB_PREFIX__.__DOMAIN__:__PORT__"
+BK_CMDB_PUBLIC_URL="__SCHEMA__://__CMDB_PREFIX__.__DOMAIN__:__PORT__"
+BK_CMDB_PRIVATE_ADDR="cmdb.service.consul:__INTRA_PORT__"
+BK_CMDB_PRIVATE_URL="http://cmdb.service.consul:__INTRA_PORT__"
+
+# Job
+BK_JOB_PREFIX="__JOB_PREFIX__"
+BK_JOB_API_PREFIX="__JOBAPI_PREFIX__"
+BK_JOB_PUBLIC_ADDR="__JOB_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_PUBLIC_URL="__SCHEMA__://__JOB_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_API_PUBLIC_ADDR="__JOBAPI_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_API_PUBLIC_URL="__SCHEMA__://__JOBAPI_PREFIX__.__DOMAIN__:__PORT__"
+BK_JOB_PRIVATE_ADDR="job.service.consul:__INTRA_PORT__"
+BK_JOB_PRIVATE_URL="http://job.service.consul:__INTRA_PORT__"
+
+# Nodeman
+BK_NODEMAN_PREFIX="__NODEMAN_PREFIX__"
+BK_NODEMAN_PUBLIC_DOWNLOAD_URL="http://__NODEMAN_PREFIX__.__DOMAIN__:__PORT__"
+
+# Password
+BK_PAAS_ADMIN_PASSWORD="__ADMIN_PASSWORD__"
+
+EOF
+
+
+# 参数校验
+
+# 校验域名
+if [[ -n $NEW_DOMAIN ]];
+then
+  CUSTOM_BK_DOMAIN=$NEW_DOMAIN
+else
+  CUSTOM_BK_DOMAIN=$DEFAULT_BK_DOMAIN
+fi
+
+if [[ "$(echo $CUSTOM_BK_DOMAIN|grep -oP '(\w{1,}\.){1,}\w{1,}')" == "" ]];
+then
+  red_echo "$CUSTOM_BK_DOMAIN 根域名不合法，请使用至少二级域名，如 bk.com"
+  exit 1
+fi
+
+# 校验安装路径
+if [[ -n $NEW_BK_HOME ]];
+then
+  CUSTOM_BK_HOME=$NEW_BK_HOME
+else
+  CUSTOM_BK_HOME=$DEFAULT_PATH
+fi
+
+if [[ "$(echo $CUSTOM_BK_HOME | grep -oP '^\/.*[^\/]$')" == "" ]];
+then
+  red_echo "$CUSTOM_BK_HOME 路径不合法，请使用正常的 linux 路径(结尾不带/)"
+  exit 1
+fi
+
+# 校验访问协议
+if [[ -n $NEW_SCHEMA ]];
+then
+  CUSTOM_SCHEMA=$NEW_SCHEMA
+else
+  CUSTOM_SCHEMA=$DEFAULT_SCHEMA
+fi
+
+if [[ "$(echo $CUSTOM_SCHEMA |grep -oP '^http$|^https$')" == "" ]] ;
+then
+  red_echo "$CUSTOM_SCHEMA 不合法，请使用 http 或 https"
+  exit 1
+fi
+
+# 校验端口
+if [[ -n $NEW_PORT ]];
+then
+  CUSTOM_PORT=$NEW_PORT
+else
+  CUSTOM_PORT=$DEFAULT_PORT
+fi
+
+if [[ "$(echo $CUSTOM_PORT | grep -oP '^\d{1,}$')" == "" ]];
+then
+  red_echo "$CUSTOM_PORT 不合法，请使用纯数字"
+  exit 1
+fi
+
+if [[ -n $NEW_INTRA_PORT ]];
+then
+  CUSTOM_INTRA_PORT=$NEW_INTRA_PORT
+else
+  CUSTOM_INTRA_PORT=$DEFAULT_INTRA_PORT
+fi
+
+if [[ "$(echo $CUSTOM_INTRA_PORT | grep -oP '^\d{1,}$')" == "" ]];
+then
+  red_echo "$CUSTOM_INTRA_PORT 不合法，请使用纯数字"
+  exit 1
+fi
+
+# 校验域名前缀
+if [[ -n $NEW_PAAS_PREFIX ]];
+then
+  CUSTOM_PAAS_PREFIX=$NEW_PAAS_PREFIX
+else
+  CUSTOM_PAAS_PREFIX=$DEFAULT_PAAS_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_PAAS_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_PAAS_PREFIX 不合法"
+  exit 1
+fi
+
+
+if [[ -n $NEW_CMDB_PREFIX ]];
+then
+  CUSTOM_CMDB_PREFIX=$NEW_CMDB_PREFIX
+else
+  CUSTOM_CMDB_PREFIX=$DEFAULT_CMDB_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_CMDB_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_CMDB_PREFIX 不合法"
+  exit 1
+fi
+
+
+if [[ -n $NEW_JOB_PREFIX ]];
+then
+  CUSTOM_JOB_PREFIX=$NEW_JOB_PREFIX
+else
+  CUSTOM_JOB_PREFIX=$DEFAULT_JOB_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_JOB_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_JOB_PREFIX 不合法"
+  exit 1
+fi
+
+if [[ -n $NEW_JOBAPI_PREFIX ]];
+then
+  CUSTOM_JOBAPI_PREFIX=$NEW_JOBAPI_PREFIX
+else
+  CUSTOM_JOBAPI_PREFIX=$DEFAULT_JOBAPI_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_JOBAPI_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_JOBAPI_PREFIX 不合法"
+  exit 1
+fi
+
+if [[ -n $NEW_NODEMAN_PREFIX ]];
+then
+  CUSTOM_NODEMAN_PREFIX=$NEW_NODEMAN_PREFIX
+else
+  CUSTOM_NODEMAN_PREFIX=$DEFAULT_NODEMAN_PREFIX
+fi
+
+if [[ "$(echo $CUSTOM_NODEMAN_PREFIX | grep -oP '^\w.*\w$')" == "" ]];
+then
+  red_echo "$CUSTOM_NODEMAN_PREFIX 不合法"
+  exit 1
+fi
+
+if [[ -n $NEW_ADMIN_PASSWORD ]];
+then
+  CUSTOM_ADMIN_PASSWORD=$NEW_ADMIN_PASSWORD
+else
+  CUSTOM_ADMIN_PASSWORD=$DEFAULT_ADMIN_PASSWORD
+fi
+
+sed -i "s#__INSTALL_PATH__#${CUSTOM_BK_HOME}#g; \
+        s#__DOMAIN__#${CUSTOM_BK_DOMAIN}#g; \
+        s#__SCHEMA__#${CUSTOM_SCHEMA}#g; \
+        s#__PORT__#${CUSTOM_PORT}#g; \
+        s#__INTRA_PORT__#${CUSTOM_INTRA_PORT}#g; \
+        s#__PAAS_PREFIX__#${CUSTOM_PAAS_PREFIX}#g; \
+        s#__CMDB_PREFIX__#${CUSTOM_CMDB_PREFIX}#g; \
+        s#__JOB_PREFIX__#${CUSTOM_JOB_PREFIX}#g; \
+        s#__JOBAPI_PREFIX__#${CUSTOM_JOBAPI_PREFIX}#g; \
+        s#__ADMIN_PASSWORD__#${CUSTOM_ADMIN_PASSWORD}#g; \
+        s#__NODEMAN_PREFIX__#${CUSTOM_NODEMAN_PREFIX}#g" ${SELF_DIR}/bin/03-userdef/global.env
+
+
+if [[ "$CUSTOM_SCHEMA" == "https" ]];
+then
+    pre_init_nginx_ssl ${CUSTOM_PAAS_PREFIX} ${CUSTOM_CMDB_PREFIX} ${CUSTOM_JOB_PREFIX} ${CUSTOM_JOBAPI_PREFIX} ${CUSTOM_NODEMAN_PREFIX} ${CUSTOM_BK_DOMAIN}
+fi
+
+green_echo "-------------- 新 global.env --------------"
+cat ${SELF_DIR}/bin/03-userdef/global.env
+green_echo "-------------------------------------------"
+yellow_echo "请继续使用 ./bkcli install bkenv 和 ./bkcli sync common 使其生效。"
