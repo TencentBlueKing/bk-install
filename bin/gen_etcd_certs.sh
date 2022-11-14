@@ -202,4 +202,4 @@ EOF
 
 
 gen_etcd_cert etcd
-#gen_etcd_cert bcs-etcd	# 生成bcs模块访问etcd的证书
+gen_etcd_cert bcs-etcd	# 生成bcs模块访问etcd的证书
