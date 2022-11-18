@@ -1,0 +1,354 @@
+#!/bin/bash
+
+usage () {
+    echo "usage: bk_install PLATFORM"
+
+    echo "PLATFORM: "
+    echo "  ./bk_install paas         安装 paas 及依赖环境"
+    echo "  ./bk_install app_mgr      安装 appo,appt 及依赖"
+    echo "  ./bk_install cmdb         安装 cmdb 及依赖环境"
+    echo "  ./bk_install job          安装 job 及依赖环境"
+    echo "  ./bk_install ci           安装 蓝盾 及依赖环境"
+    echo "  ./bk_install bkmonitorv3  安装 bkmonitorv3 及依赖环境"
+    echo "  ./bk_install bknodeman    安装 bknodeman 及依赖环境"
+    echo "  ./bk_install bklog        安装 bklog 及依赖环境"
+    echo "  ./bk_install paas_plugin  安装 paas_plugins 及依赖环境"
+    echo "  ./bk_install lesscode     安装 可视化开发平台"
+    echo "  ./bk_install bkauth       安装 认证服务"
+    echo "  ./bk_install iam_search_engine  安装权限中心 iam_search_engine 模块"
+    echo "  ./bk_install saas-[o|t] [APP_CODE[==x.x.x]]  从后台部署 saas 应用"
+}
+
+export LC_ALL=en_US.UTF-8
+SELF_DIR=$(dirname "$(readlink -f "$0")")
+export CTRL_DIR=$SELF_DIR
+service=$1
+cd ${BASH_SOURCE%/*} 2>/dev/null
+source ./functions
+step_file=.bk_install.step
+[ -f $step_file ] || touch $step_file
+
+log "commond: bk_install $@" >/dev/null
+
+_bkc () {
+    if grep -xF "$*" $step_file >/dev/null; then
+        log "$@ has been performed without FATAL stat...  $(green_echo skip)"
+    else
+        ./bkcli $@ && echo "$*" >>$step_file
+
+        [ $? -eq 0 -o $? -eq 10 ] || exit 1
+    fi
+}
+
+# 检查协议
+check_agreement || exit 1
+
+# 检查Shell
+shell_type_check 
+
+case $service in
+    common)
+        _bkc install controller
+        _bkc install bkenv
+        _bkc install python
+        _bkc sync common
+        _bkc update bkenv
+        _bkc sync cert
+        _bkc install cert
+        _bkc install yum
+        ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
+        echo ""
+        echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸部署基础依赖的安装, 请按照文档继续执行剩余步骤"
+        echo ""
+        ;;
+    paas)
+        _bkc install consul
+        _bkc start consul
+        _bkc sync license
+        _bkc install license
+        _bkc install mysql
+        _bkc install redis
+        _bkc install redis_sentinel
+        _bkc start mysql
+        _bkc install nginx
+        source ${SELF_DIR}/load_env.sh
+        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+            _bkc install nfs
+        fi
+        _bkc start license
+        _bkc start redis
+        _bkc start redis_sentinel
+        _bkc start nginx
+
+        _bkc sync bkiam
+        _bkc install bkiam
+        _bkc start bkiam
+
+        _bkc sync bkssm
+        _bkc install bkssm
+        _bkc start bkssm
+
+        _bkc sync paas
+        _bkc install paas
+        _bkc start paas
+
+        _bkc install rabbitmq
+        _bkc start rabbitmq
+        _bkc sync usermgr
+        _bkc install usermgr
+        _bkc start usermgr
+        _bkc initdata paas
+
+        ./bkcli status redis_sentinel
+        for svs in redis nginx mysql paas iam usermgr; do
+            ./bkcli status $svs
+        done
+        source ${SELF_DIR}/load_env.sh
+        source ${SELF_DIR}/tools.sh
+
+        # 初始化saas所需环境变量到paas数据库
+        add_saas_environment
+        # 增加免登录态白名单到paas数据库
+        add_saas_skip_auth
+
+        echo ""
+        echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸 PaaS 平台的部署, 现在可以通过 $(green_echo $BK_PAAS_PUBLIC_URL) 进行访问, 并请按照文档继续执行剩余步骤"
+        echo "登陆用户名(login user): $(green_echo $BK_PAAS_ADMIN_USERNAME)"
+        echo "登陆密码(login password): $(green_echo $BK_PAAS_ADMIN_PASSWORD)"
+        echo 
+        ;;
+    bkauth)
+        _bkc install redis
+        _bkc install redis_sentinel
+        _bkc start redis
+        _bkc start redis_sentinel
+        _bkc sync bkauth
+        _bkc install bkauth
+        _bkc start bkauth
+        ;;
+    cmdb)
+        _bkc install redis
+        _bkc install redis_sentinel
+        _bkc install nginx
+        _bkc start redis
+        _bkc start redis_sentinel
+        _bkc install mongodb
+        _bkc install zk
+        _bkc start zk
+        _bkc sync gse
+        wait_ns_alive zk.service.consul || fail "zk.service.consul无法解析"
+        _bkc install gse
+        _bkc sync cmdb
+        _bkc install cmdb
+        _bkc start cmdb
+        wait_ns_alive cmdb-admin.service.consul || fail "cmdb-admin.service.consul无法解析"
+        _bkc initdata cmdb
+        _bkc start nginx
+        source ${SELF_DIR}/load_env.sh 
+        ./bkcli status redis_sentinel
+        for svs in zk nginx redis mongodb gse cmdb; do
+            ./bkcli status $svs
+        done
+
+        echo ""
+        echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸配置平台的部署, 现在可以通过 $(green_echo  $BK_CMDB_PUBLIC_URL) 进行访问, 并请按照文档继续执行剩余步骤"
+        echo ""
+        ;;
+    job)
+        _bkc install redis
+        _bkc install redis_sentinel
+        _bkc install nginx
+        _bkc install mysql
+        _bkc install mongodb
+        _bkc install rabbitmq
+        _bkc install cmdb
+        _bkc install zk
+        _bkc install license
+        _bkc install gse
+        _bkc sync job
+        _bkc install job backend
+        _bkc install job frontend
+        
+        source ${SELF_DIR}/load_env.sh
+        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+            _bkc install nfs
+        fi
+        _bkc start redis
+        _bkc start redis_sentinel
+        wait_ns_alive zk.service.consul
+        _bkc start zk
+        _bkc start nginx
+        _bkc start mysql
+        _bkc start cmdb
+        _bkc initdata cmdb
+        _bkc start license
+        _bkc start gse
+        _bkc start job
+
+        ./bkcli status redis_sentinel
+        for svs in mysql redis zk rabbitmq license cmdb gse job; do
+            ./bkcli status $svs
+        done
+
+        source ${SELF_DIR}/load_env.sh
+        echo ""
+        echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸作业平台的部署, 现在可以通过 $(green_echo $BK_JOB_PUBLIC_URL) 进行访问, 并请按照文档继续执行剩余步骤"
+        echo ""
+        ;;
+    bkmonitorv3)
+        _bkc install es7
+        _bkc start es7
+        _bkc initdata es7
+        _bkc install kafka
+        _bkc install redis_sentinel
+        _bkc install influxdb
+        _bkc start kafka
+        _bkc start redis
+        _bkc start redis_sentinel
+        _bkc start influxdb
+        for module in paas job cmdb; do
+            if ! grep -q "start $module" $step_file; then
+                fail "$module is required for $service. please install $module first"
+            fi
+        done
+
+        source ${SELF_DIR}/.rcmdrc # 获取tools.sh所需变量CTRL_DIR
+        source ${SELF_DIR}/tools.sh
+        migrate_sql monitorv3
+        _bkc install saas-o bk_monitorv3
+        _bkc sync bkmonitorv3
+        _bkc install bkmonitorv3
+        _bkc start bkmonitorv3
+        # 特殊步骤, 当有两台grafana时，grafana初次启动，有一台会migrate失败导致启动失败
+        _bkc start bkmonitorv3 grafana
+        ./bkcli status bkmonitorv3
+        echo 
+        echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 蓝鲸监控v3)的部署"
+        echo 
+        ;;
+    bklog)
+        _bkc sync bklog
+        _bkc install bklog
+        _bkc start bklog
+        ./bkcli status bklog
+        _bkc install saas-o bk_log_search
+        echo 
+        echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 日志平台)的部署"
+        echo 
+        ;;
+    bknodeman)
+        _bkc install saas-o bk_nodeman
+        source ${SELF_DIR}/load_env.sh
+        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+            _bkc install nfs
+        fi
+        _bkc sync nodeman
+        _bkc install nodeman
+        echo "等待bknodeman启动成功"
+        sleep 10
+        _bkc initdata nodeman
+        _bkc start nodeman
+        ./bkcli status nodeman
+        echo 
+        echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 节点管理)的部署, 并请按照文档继续执行剩余步骤"
+        echo 
+        ;;
+    fta)
+        _bkc install redis_sentinel
+        _bkc install beanstalk
+        _bkc start redis_sentinel
+        _bkc start beanstalk
+
+        for module in paas job cmdb; do
+            if ! grep -q "start $module" $step_file; then
+                fail "$module is required for $service. please install $module first"
+            fi
+        done
+
+        _bkc sync fta
+        _bkc install fta
+        _bkc start fta
+        _bkc install saas-o bk_fta_solutions
+
+        for svs in redis_sentinel beanstalk fta; do
+            ./bkcli status $svs
+        done
+
+        echo ""
+        echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 故障自愈) 的部署"
+        echo ""
+        ;;
+    app_mgr)
+        _bkc install rabbitmq
+        _bkc start rabbitmq
+        source ${SELF_DIR}/load_env.sh
+        if [[ -n ${BK_APPT_IP_COMMA} ]];then
+            _bkc sync appt
+            _bkc install appt
+            _bkc start appt
+            ./bkcli status appt
+        fi
+        _bkc sync appo
+        _bkc install appo
+        _bkc start appo
+        ./bkcli status appo
+        ./bkcli status rabbitmq
+
+        echo ""
+        echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo PaaSAgent 正式环境及测试环境) 的部署，请按照文档继续执行剩余步骤"
+        echo ""
+        ;;
+    paas_plugin)
+        _bkc install redis
+        _bkc start redis
+        _bkc install es7
+        _bkc start es7
+        _bkc initdata es7
+        _bkc sync paas_plugins
+        _bkc install paas_plugins
+        _bkc start paas_plugins
+
+        ./bkcli status paas_plugins
+
+        echo ""
+        echo "如果以上步骤没有报错, 现在已经完成蓝鲸平台插件包, 支持 PaaS, SaaS 的日志入库和告警功能"
+        echo "在开发者中心点击任意 APP, 在左侧导航的日志服务和告警服务中可以使用该功能"
+        echo ""
+        ;;
+    lesscode) 
+        _bkc sync lesscode
+        _bkc install lesscode
+        _bkc initdata lesscode
+        _bkc start lesscode
+        ;;
+    saas-o|saas-t)
+        ./bkcli install $@
+        echo ""
+        echo "如果以上步骤没有报错, 说明你已经完成 $(green_echo 蓝鲸官方 SaaS\($2\)) 的部署"
+        echo ""
+        ;;
+    bkiam_search_engine|iam_search_engine)
+        _bkc sync iam_search_engine
+        _bkc install es7
+        _bkc start es7
+        _bkc initdata es7
+        _bkc install iam_search_engine
+        _bkc status iam_search_engine
+        echo ""
+        echo "如果以上步骤没有报错, 说明你已经完成 $service 的部署"
+        echo ""
+        ;;
+    bkapigw|apigw)
+        _bkc install etcd
+        _bkc sync apigw
+        _bkc install apigw
+        _bkc start apigw
+        _bkc status apigw
+        _bkc install apisix
+        _bkc start apisix
+        ;;
+    ci) 
+       bash ./bk_install_ci
+       ;;
+    *) usage; exit 0 ;;
+esac

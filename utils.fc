@@ -1,0 +1,2 @@
+source ${CTRL_DIR}/load_env.sh
+source ${CTRL_DIR}/functions

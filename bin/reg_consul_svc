@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+
+# 用途：生成consul服务定义的json配置文件，或者直接通过http api注册到本机agent。
+# consul 1.0以上版本支持consul services register
+# 依赖 jq 命令来处理json字符串
+# 参考：https://www.consul.io/docs/agent/services.html
+
+set -euo pipefail
+
+# 通用脚本框架变量
+PROGRAM=$(basename "$0")
+VERSION=1.0
+EXITCODE=0
+
+# 服务名，多个服务实例可以共用同样的NAME
+NAME=
+
+# 服务ID，在每个agent上，必须保证唯一，如果不提供，则默认用NAME
+ID=
+
+# 服务地址，如果不指定，默认用agent的地址
+ADDRESS=
+
+# 端口，该服务的端口号
+PORT=
+
+# TAG，服务tag
+TAG=
+
+# 生成json到stdout
+DRY_RUN=
+
+# consul 注册接口路径
+readonly AGENT_REG_SVC_API="/v1/agent/service/register"
+readonly AGENT_LIST_SVC_API="/v1/agent/services"
+CONSUL_HTTP_URL="http://127.0.0.1:8500"
+
+usage () {
+    cat <<EOF >&2
+用法: 
+    $PROGRAM [ -h --help -?  查看帮助 ]
+            [ -n, --name        [必选] "注册到consul的服务名(service name)" ]
+            [ -p, --port        [必选] "注册到consul的服务端口" ]
+            [ -a, --address     [必选] "注册到consul的服务地址，一般与服务的bindip一致" ]
+            [ -t, --tag         [可选] "注册到consul的服务的tag" ]
+            [ -i, --url         [可选] "consul的api地址，默认为：http://127.0.0.1:8500" ]
+            [ -D, --dry-run     [可选] "打印出生成的consul服务定义文件到标准输出" ]
+            [ -v, --version     [可选] 查看脚本版本号 ]
+EOF
+}
+
+usage_and_exit () {
+    usage
+    exit "$1"
+}
+
+log () {
+    echo "$@"
+}
+
+error () {
+    echo "$@" 1>&2
+    usage_and_exit 1
+}
+
+warning () {
+    echo "$@" 1>&2
+    EXITCODE=$((EXITCODE + 1))
+}
+
+version () {
+    echo "$PROGRAM version $VERSION"
+}
+
+get_local_svc () {
+    curl -s "$LIST_SVC_API" |  jq -r '.[] | [.Service, .Port] |@csv' 
+}
+
+# 解析命令行参数，长短混合模式
+(( $# == 0 )) && usage_and_exit 1
+while (( $# > 0 )); do 
+    case "$1" in
+        -D | --dry-run )
+            DRY_RUN=1
+            ;;
+        -a | --address )
+            shift
+            ADDRESS=$1
+            ;;
+        -t | --tag )
+            shift
+            TAG=$1
+            ;;
+        -n | --name)
+            shift
+            NAME=$1
+            ;;
+        -p | --port )
+            shift
+            PORT="$1"
+            ;;
+        -i | --url )
+            shift
+            CONSUL_HTTP_URL="$1"
+            ;;
+        --help | -h | '-?' )
+            usage_and_exit 0
+            ;;
+        --version | -v | -V )
+            version 
+            exit 0
+            ;;
+        -*)
+            error "不可识别的参数: $1"
+            ;;
+        *) 
+            break
+            ;;
+    esac
+    shift $(( $# == 0 ? 0 : 1 ))
+done 
+
+if ! command -v jq &>/dev/null; then
+    warning "jq 命令不存在，请安装"
+fi 
+
+if ! [[ $PORT =~ ^[0-9]+$ ]]; then
+    warning "$PORT 不是纯数字端口号"
+fi
+
+if ! [[ $ADDRESS =~ ^[0-9.]+$ ]]; then
+    warning "$ADDRESS 不是ip格式"
+fi
+
+if ! [[ $NAME =~ ^[0-9a-z-]+$ ]]; then
+    warning "$NAME 不满足正则：^[0-9a-z-]+$ "
+fi
+if (( EXITCODE > 0 )); then
+    usage_and_exit "$EXITCODE"
+fi
+REG_SVC_API=${CONSUL_HTTP_URL}${AGENT_REG_SVC_API}
+LIST_SVC_API=${CONSUL_HTTP_URL}${AGENT_LIST_SVC_API}
+
+ID="${NAME}"-$(uuid)
+
+# 生成service definition JSON
+if [[ -z "$TAG" ]]; then
+    req=$(cat <<EOF
+{
+  "service": {
+    "id": "$ID",
+    "name": "$NAME",
+    "address": "$ADDRESS",
+    "port": $PORT,
+    "check": {
+      "tcp": "$ADDRESS:$PORT",
+      "interval": "10s",
+      "timeout": "3s"
+    }
+  }
+}
+EOF
+)
+else
+    req=$(cat <<EOF
+{
+  "service": {
+    "id": "$ID",
+    "name": "$NAME",
+    "tags": [ "$TAG" ],
+    "address": "$ADDRESS",
+    "port": $PORT,
+    "check": {
+      "tcp": "$ADDRESS:$PORT",
+      "interval": "10s",
+      "timeout": "3s"
+    }
+  }
+}
+EOF
+)
+fi
+
+if [[ $DRY_RUN -eq 1 ]]; then
+    if get_local_svc | grep -qxF "\"$NAME\",$PORT"; then
+        echo "$NAME : $PORT already register, please check that the following information is as expected"  >&2
+    fi
+    echo "$req"
+else
+    if get_local_svc | grep -qxF "\"$NAME\",$PORT"; then
+        echo "$NAME : $PORT already register, ignore..."  >&2
+        exit 0
+    fi
+    # 请求注册接口
+    curl --request PUT --data "$(jq -r .service <<<"$req")" "$REG_SVC_API"
+    
+    # 判断是否注册成功
+    SVC_CNT=$(get_local_svc | grep -cxF "\"$NAME\",$PORT")
+    if (( SVC_CNT > 0 )); then
+        echo "${NAME}.service.consul:$PORT 注册成功"
+    else
+        echo "${NAME}.service.consul:$PORT 注册失败"
+        exit 2
+    fi
+fi

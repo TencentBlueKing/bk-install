@@ -1,0 +1,578 @@
+#!/bin/bash
+
+set -euo pipefail
+trap 'on_err;' ERR
+trap 'on_int;' INT
+ci_env_default="./bin/default/ci.env"
+ci_env_03="./bin/03-userdef/ci.env"
+
+on_err (){
+  local ret=$?
+  echo ""
+  echo "$BASH_SOURCE:$BASH_LINENO: 返回了 $ret，导致本脚本退出，请解决问题后重新运行。"
+  exit $ret
+}
+on_int (){
+  echo " 按 CTRL-C 会直接中断安装，不过你可以重新运行本脚本。长时间没有输出时建议多等待一会儿。"
+  exit 1
+}
+
+sync_ci (){
+  ./bkcli sync ci
+}
+
+sync_common (){
+  ./bkcli sync common | grep -w "${BK_CI_IP_COMMA//,/|}" || true
+}
+
+set_env03 (){
+  for kv in "$@"; do
+    if ! grep -q "^${kv%%=*}=[^ ]" "$ci_env_03" 2>/dev/null; then  # 非空则不覆盖.
+      echo "SET_ENV03: $ci_env_03 中未曾赋值，新增 $kv"
+      [[ "$kv" =~ ^[A-Z0-9_]+=$ ]] && echo -e "\033[31;1m注意：\033[m$kv 赋值为空，请检查蓝鲸是否安装正确，或人工修改env文件后重试。"
+      # 如果已经有相同的行，则也不覆盖，防止赋值为空时不断追加。
+      grep -qxF "$kv" "$ci_env_03" 2>/dev/null || echo "$kv" >> "$ci_env_03"
+    fi
+  done
+  ./bin/merge_env.sh ci &>/dev/null || true
+  sync_common
+  source ./load_env.sh
+}
+random_pass (){
+  base64 /dev/urandom | head -c ${1:-16}
+}
+uuid_v4 (){
+  if command -v uuidgen &>/dev/null; then
+    uuidgen
+  elif command -v uuid &>/dev/null; then
+    uuid -v 4
+  else
+    echo >&2 "ERROR: no UUID v4 provider available. please install uuidgen or uuid command."
+    return 0
+  fi
+}
+
+prepare_rabbitmq_plugin (){
+  local rabbitmq_plugin_dir="/usr/lib/rabbitmq/plugins/"
+  local rabbitmq_plugin_filename="rabbitmq_delayed_message_exchange-3.8.0.ez"
+  #rabbitmq_plugin_md5sum="5d9a0af3c7ceedba7e551d407e47bde8"
+  local rabbitmq_plugin_url="https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases/download/v3.8.0/$rabbitmq_plugin_filename"
+  local rabbitmq_plugin_filepath="$rabbitmq_plugin_dir/$rabbitmq_plugin_filename"
+  if ! [ -f "$BK_PKG_SRC_PATH/$rabbitmq_plugin_filename" ]; then
+    echo "$BK_PKG_SRC_PATH/$rabbitmq_plugin_filename not exist, you may download it from $rabbitmq_plugin_url"
+    return 1
+  fi
+  chmod 644 "$BK_PKG_SRC_PATH/$rabbitmq_plugin_filename"
+  ./sync.sh rabbitmq "$BK_PKG_SRC_PATH/$rabbitmq_plugin_filename" "$BK_PKG_SRC_PATH/"
+  pcmd -m rabbitmq "mkdir -p \"$rabbitmq_plugin_dir\"; cp -a \"$BK_PKG_SRC_PATH/$rabbitmq_plugin_filename\" \"$rabbitmq_plugin_dir\""
+}
+
+tip_file_in_zip (){
+  if unzip -Z1 "$1" "$2" &>/dev/null; then
+    echo " zip文件 $1 中存在 $2"
+    return 0
+  else
+    echo " zip文件 $1 中不存在 $2"
+    return 1
+  fi
+}
+tip_file_exist (){
+  if [ -f "$1" ]; then
+    echo "文件 $1 存在"
+    return 0
+  else
+    echo "文件 $1 不存在"
+    return 1
+  fi
+}
+
+# 检查私有构建机依赖
+check_private_vm_deps (){
+  local agent_package_dir="$BK_PKG_SRC_PATH/ci/agent-package/"
+  local platform_supported=0
+
+  BUILD_PRIVATE_VM_DETAIL="可运行私有构建机的系统："
+  command -v unzip >/dev/null || yum -y install unzip
+  echo " 检查 Linux 私有构建机的 jre.zip"
+  java_bin_path="bin/java"
+  bcprov_jar_path="lib/ext/bcprov-jdk16-1.46.jar"
+  linuxjrezip="$agent_package_dir/jre/linux/jre.zip"
+  if ! tip_file_exist "$linuxjrezip"; then
+    local gen_jre_sh="./bin/bk-ci-gen-jrezip.sh"
+    local java_pkg="$BK_PKG_SRC_PATH/java8.tgz"
+    echo "  尝试调用 $gen_jre_sh $java_pkg 生成Linux jre.zip"
+    if ! [ -f "$gen_jre_sh" ]; then
+      echo "   $gen_jre_sh 不存在, 无法生成."
+    elif ! [ -f "$java_pkg" ]; then
+      echo "   $java_pkg 不存在, 无法生成."
+    else
+      BK_PKG_SRC_PATH="$BK_PKG_SRC_PATH" "$gen_jre_sh" linux "$java_pkg" || echo "   生成过程中出错, 但不影响安装. 后期修正报错后可重新执行本脚本增量安装."
+    fi
+  fi
+  if tip_file_exist "$linuxjrezip" &>/dev/null &&
+     tip_file_in_zip "$linuxjrezip" "$java_bin_path" &&
+     tip_file_in_zip "$linuxjrezip" "$bcprov_jar_path"; then
+    BUILD_PRIVATE_VM_DETAIL="$BUILD_PRIVATE_VM_DETAIL; 支持 Linux"
+    let ++platform_supported
+  else
+    BUILD_PRIVATE_VM_DETAIL="$BUILD_PRIVATE_VM_DETAIL; 不支持 Linux (无JRE) "
+  fi
+  echo " 检查 MacOS 私有构建机的 jre.zip"
+  macosjrezip="$agent_package_dir/jre/macos/jre.zip"
+  if tip_file_exist "$macosjrezip" &&
+     tip_file_in_zip "$macosjrezip" "Contents/Home/$java_bin_path" &&
+     tip_file_in_zip "$macosjrezip" "Contents/Home/$bcprov_jar_path"; then
+    BUILD_PRIVATE_VM_DETAIL="$BUILD_PRIVATE_VM_DETAIL; 支持 MacOS"
+    let ++platform_supported
+  else
+    BUILD_PRIVATE_VM_DETAIL="$BUILD_PRIVATE_VM_DETAIL; 不支持 MacOS (无JRE) "
+  fi
+  echo " 检查 Windows 私有构建机的 jre.zip 及 unzip.exe"
+  windowsjrezip="$agent_package_dir/jre/windows/jre.zip"
+  windowsunzipexe="$agent_package_dir/packages/windows/unzip.exe"
+  # zip文件中使用 / 作为路径分隔符. 所以下方是/.
+  if tip_file_exist "$windowsjrezip" &&
+     tip_file_in_zip "$windowsjrezip" "$java_bin_path.exe" &&
+     tip_file_in_zip "$windowsjrezip" "$bcprov_jar_path" &&
+     tip_file_exist "$windowsunzipexe"; then
+    BUILD_PRIVATE_VM_DETAIL="$BUILD_PRIVATE_VM_DETAIL; 支持 Windows"
+    let ++platform_supported
+  else
+    BUILD_PRIVATE_VM_DETAIL="$BUILD_PRIVATE_VM_DETAIL; 不支持 Windows (无JRE或unzip) "
+  fi
+  BUILD_PRIVATE_VM_DETAIL=${BUILD_PRIVATE_VM_DETAIL/; /}
+  # 如果完全不支持，则返回1，如果部分或完全支持，则0
+  let platform_supported
+}
+
+max_retry (){
+  local max_retry_limit=${1:-1}
+  local max_retry_sleep=${2:-0}
+  local max_retry_cmd_check=${3:-}
+  local max_retry_cmd_step=${4:-}
+  local _n=0  # 内部计数器
+  [ $# -lt 3 ] && { echo "Usage: max_retry COUNT SLEEP CMD_CHECK [CMD_STEP]"; exit 1; }
+  # 如果max_retry_limit<=0, 则不重试
+  until [ $max_retry_limit -le 0 ] || eval "${max_retry_cmd_check:-false}" ; do
+    let ++_n
+    sleep "${max_retry_sleep:-1}"
+    (( --max_retry_limit )) || return 1  # 如果max_retry_limit=0, 则直接return 1;
+    [ -n "${max_retry_cmd_step:-}" ] && eval "${max_retry_cmd_step:-:}"
+  done
+  return 0
+}
+
+pcmd (){
+  local PCMD_TIMEOUT=${PCMD_TIMEOUT:-1200}
+  timeout "$PCMD_TIMEOUT" $CTRL_DIR/pcmd.sh "$@" || {
+    local ret=$?
+    [ $ret -ne 124 ] || echo "pcmd 执行超时(PCMD_TIMEOUT=${PCMD_TIMEOUT})"
+    echo "$BASH_SOURCE:$BASH_LINENO 调用pcmd时返回 $ret，中控机调试命令如下:"
+    printf " %q" "$CTRL_DIR/pcmd.sh" "$@"
+    printf "\n"
+    return $ret
+  }
+}
+
+hiline (){  # usage: hiline "SGR_NUMBER" "msg"  -- hilight whole line.
+  printf "\033[%sm%s\033[K\033[m\n" "${2:-40;37;100;97;1}" "$1"  # 默认灰底白字
+}
+hiline_notice="41;37;101;97;1"  # 红底白字
+hiline_success="42;37;97;1"  # 绿底白字
+
+if [ -z "$CTRL_DIR" ]; then
+  echo "环境变量 CTRL_DIR 为空，请先安装蓝鲸环境，重新登录后再执行本脚本。"
+  exit 1
+fi
+cd "$CTRL_DIR"
+
+source ./load_env.sh
+
+hiline "检查 CI 安装包"
+if [ -z "${BK_PKG_SRC_PATH:-}" ]; then
+  echo " 环境变量 BK_PKG_SRC_PATH 为空，请检查 蓝鲸 环境是否部署正常。"
+  exit 1
+fi
+if [ -d "$BK_PKG_SRC_PATH/ci" ]; then
+  ci_version="$(< "$BK_PKG_SRC_PATH/ci/VERSION")"
+  echo " CI 安装包版本：$ci_version"
+  if echo "$ci_version" | grep -qv ^v1[.]2; then
+    echo "本脚本仅支持部署v1.2.X版本. 如为新版CI软件包请遵循官方升级指引操作."
+    exit 0
+  fi
+else
+  echo " CI 安装包目录 $BK_PKG_SRC_PATH/ci/ 不存在，请先在中控机运行如下命令完成安装目录准备工作："
+  echo "./bin/prepare-bk-ci.sh CI安装包路径"
+  exit 1
+fi
+pkg_env_tpl="$BK_PKG_SRC_PATH/ci/scripts/bkenv.properties"
+if [ -f "$pkg_env_tpl" ] && ! diff -q "$pkg_env_tpl" "$ci_env_default" 2>/dev/null; then
+  echo "安装包中存在新版env文件, 更新ci.env模板: $ci_env_default"
+  cp -v "$pkg_env_tpl" "$ci_env_default" || echo "更新ci.env模板失败."
+fi
+echo "检查RabbitMQ插件"
+tip_file_exist "$BK_PKG_SRC_PATH/rabbitmq_delayed_message_exchange-3.8.0.ez" || {
+  echo "请参考部署文档提前下载插件."
+  exit 1
+}
+
+echo "检查私有构建机运行依赖, 如果您暂不需要私有构建机, 可先行忽略, 今后可参考部署文档加装: "
+if check_private_vm_deps; then
+  BUILD_PRIVATE_VM_SUPPORT=1
+else
+  BUILD_PRIVATE_VM_SUPPORT=0
+fi
+echo " $BUILD_PRIVATE_VM_DETAIL"
+
+hiline "检查 install.config"
+./bin/bk-install-config-parser.awk install.config > bin/02-dynamic/hosts.env
+source ./load_env.sh
+# 判断环境变量, 提示先填写 install.config.
+if [ -z "${BK_CI_IP_COMMA:-}" ]; then
+  echo " 请先更新 $CTRL_DIR/install.config 文件，新增 CI 的配置。"
+  echo " 单节点示例：（请修改IP1）"
+  echo "IP1  ci(gateway),ci(dockerhost),ci(artifactory),ci(auth),ci(dispatch),ci(environment),ci(image),ci(log),ci(misc),ci(notify),ci(openapi),ci(plugin),ci(process),ci(project),ci(quality),ci(repository),ci(store),ci(ticket),ci(websocket)"
+  exit 1
+else
+  echo " 发现 CI 节点: $BK_CI_IP_COMMA"
+fi
+# 同主机相斥: ip_commas modules reason suggestion
+install_config_conflict (){
+  local conflict_ip=$(echo "$1" | tr ',' '\n' | sort | uniq -d)
+  if [ -n "$conflict_ip" ]; then
+    echo "install.config中$2模块部署到了相同的主机: ${conflict_ip//$'\n'/,}, 因为二者均${3:-未填写原因}, 建议${4:-无}."
+    return 1
+  fi
+}
+# 同主机相吸: ip_commas modules
+install_config_affinity (){
+  local lonely_ip=$(echo "$1" | tr ',' '\n' | sort | uniq -u)
+  if [ -n "$lonely_ip" ]; then
+    echo "install.config中$2模块需要部署到相同的主机, 但是如下IP中仅配置了其中一项: ${conflict_ip//$'\n'/,}."
+    return 1
+  fi
+}
+# 需要存在. ip_comma module tip
+install_config_exist (){
+  if [ -z "$1" ]; then
+    echo "install.config中未定义$2. $3"
+    return 1
+  fi
+}
+
+install_config_conflict "${BK_NGINX_IP_COMMA:-},$BK_CI_GATEWAY_IP_COMMA" \
+  "ci(gateway)与nginx" "需要独占80端口" \
+  "将ci(gateway)移到其他节点"
+install_config_conflict "${BK_CI_AGENTLESS_IP_COMMA:-},${BK_CI_DOCKERHOST_IP_COMMA:-}" \
+  "ci(agentless)与ci(dockerhost)" "需要独占dockerd" \
+  "分开部署或放弃一个: 单节点部署时建议放弃agentless, 如放弃dockerhost则需在项目内导入私有构建机进行构建"
+
+install_config_exist "${BK_CONSUL_IP_COMMA:-}" \
+  "consul" \
+  "新增 CI 配置项时请勿删除文件原有内容."
+install_config_exist "${BK_CI_ES_REST_ADDR:-${BK_ES7_IP:-}}" \
+  "es7" \
+  "或在 $ci_env_03 中定义 BK_CI_ES_REST_ADDR"
+install_config_exist "${BK_CI_DOCKERHOST_IP_COMMA:-}" \
+  "ci(dockerhost)" \
+  "没有配置公共构建机, 您可在配置流水线时选择“私有构建机”." ||
+  [ $BUILD_PRIVATE_VM_SUPPORT -gt 0 ] || {
+    echo " $BUILD_PRIVATE_VM_DETAIL"
+    echo "请参考部署文档完成任一类型私有构建机的准备工作, 然后才能继续安装.";
+    exit 1;
+  }
+install_config_exist "${BK_CI_AGENTLESS_IP_COMMA:-}" \
+  "ci(agentless)" \
+  "(可选) 您在流水线中将无法使用 “无编译环境”." || true
+
+hiline "检查 蓝鲸 基础服务"
+echo -n " PaaS "
+max_retry 1 1 "getent hosts ${BK_PAAS_HOST:-${BK_PAAS_PRIVATE_ADDR%:*}} &>/dev/null" && echo "ok" || {
+  echo " 请先安装并启动 paas 服务，然后执行本脚本。"
+  exit 7
+}
+echo -n " IAMv3 "
+max_retry 1 1 "getent hosts bkiam.service.consul &>/dev/null" && echo "ok" || {
+  echo " 请先安装并启动 bkiam 服务，然后执行本脚本。"
+  exit 7
+}
+echo -n " SSM "
+max_retry 1 1 "getent hosts bkssm.service.consul &>/dev/null" && echo "ok" || {
+  echo " 请先安装并启动 bkssm 服务，然后执行本脚本。"
+  exit 7
+}
+
+hiline "检查 env 文件: $ci_env_default, $ci_env_03"
+if ! [ -f "$ci_env_default" ]; then
+  echo "错误: ci.env 模板不存在: $ci_env_default"
+  exit 1
+fi
+if [ -f "$ci_env_03" ]; then
+  echo " 注意: env03 已经存在, 可能已经安装: $ci_env_03"
+  echo -e "\033[31;1m 注意: 本脚本默认为增量安装, 仅在版本号变动时才自动停止对应节点的蓝盾服务. 您也可以使用 pcmd -m ci 'systemctl stop bk-ci.target' 停止全部蓝盾服务.\033[m"
+  pcmd -m ci 'if diff -q ${BK_PKG_SRC_PATH:-/data/src}/ci/VERSION $BK_HOME/ci/VERSION &>/dev/null; then echo "版本未曾变动, 不自动停止 $LAN_IP 上的 CI 服务."; else echo "检测到 CI 版本变动, 将停止 $LAN_IP 上的 CI 服务: systemctl stop bk-ci.target"; fi;' | grep "版本" || true
+  echo " 如需继续安装, 请等待 ${SLEEP:-10} 秒. 如需中止, 请按CTRL-C."
+  sleep ${SLEEP:-10}
+  #exit 0
+fi
+
+hiline "检查设置 CI 基础配置"
+set_env03 BK_HTTP_SCHEMA=http \
+  BK_DOMAIN=$BK_DOMAIN \
+  BK_PAAS_PUBLIC_URL=$BK_PAAS_PUBLIC_URL \
+  BK_CI_AUTH_PROVIDER=bk_login_v3 \
+  BK_CI_FQDN=devops.\$BK_DOMAIN \
+  BK_HOME=$BK_HOME \
+  BK_CI_PUBLIC_URL=http://\$BK_CI_FQDN \
+  BK_SSM_HOST=bkssm.service.consul \
+  BK_IAM_PRIVATE_URL=$BK_IAM_PRIVATE_URL \
+  BK_PAAS_FQDN=${BK_PAAS_FQDN:-${BK_PAAS_PUBLIC_ADDR%:*}} \
+  BK_PAAS_HTTPS_PORT=${BK_PAAS_HTTPS_PORT:-443} \
+  BK_PAAS_PRIVATE_URL=$BK_PAAS_PRIVATE_URL \
+  BK_SSM_PORT=$BK_SSM_PORT \
+  BK_LICENSE_PRIVATE_URL=$BK_LICENSE_PRIVATE_URL \
+  BK_CI_PAAS_DIALOG_LOGIN_URL=$BK_PAAS_PUBLIC_URL/login/plain/?c_url= \
+  BK_CI_PAAS_LOGIN_URL=\$BK_PAAS_PUBLIC_URL/login/\?c_url= \
+  BK_CI_REPOSITORY_GITLAB_URL=http://\$BK_CI_FQDN \
+  BK_CI_APP_CODE=bk_ci \
+  BK_CI_APP_TOKEN=$(uuid_v4)
+
+expected_BK_CI_HOST="bk-ci.service.consul"
+if [ "$BK_CI_HOST" != "$expected_BK_CI_HOST" ]; then
+  patt_bad_ci_host="^BK_CI_HOST=['\"]?${BK_CI_HOST//./[.]}"
+  if grep -Eq "$patt_bad_ci_host" "$ci_env_03"; then
+    echo "检查发现 $ci_env_03 中修改了 BK_CI_HOST 为 $BK_CI_HOST, 请保持默认值."
+  elif grep -Eq "$patt_bad_ci_host" "$ci_env_default"; then
+    echo "检查发现 $ci_env_default 里 BK_CI_HOST 默认值并非 $expected_BK_CI_HOST, 请更新 CI 软件包."
+  else
+    echo "最终env里BK_CI_HOST的值($BK_CI_HOST)不是预期的bk-ci.service.consul, 请勿修改此值."
+  fi
+  exit 1
+fi
+
+hiline "新节点免密登录检查及配置"
+./configure_ssh_without_pass
+
+hiline "新节点初始化"
+sync_common
+pssh -i -H "${BK_CI_IP[*]}" "$CTRL_DIR/bin/init_new_node.sh"
+
+hiline "开始后台同步 CI 安装包..."
+{ sync_ci & sync_ci_pid=$!; } 2>/dev/null
+
+hiline "配置数据库"
+# 选择复用mysql, 生成密码并创建账户, 刷新03env.
+set_env03 BK_CI_MYSQL_ADDR=${BK_MYSQL_IP}:3306 BK_CI_MYSQL_USER=bk_ci BK_CI_MYSQL_PASSWORD=$(random_pass)
+
+# TODO 应该仅在蓝鲸环境中自动配置权限及密码。
+# ci节点授权
+pcmd -H "$BK_MYSQL_IP" '$CTRL_DIR/bin/grant_mysql_priv.sh -n default-root -u "$BK_CI_MYSQL_USER" -p "$BK_CI_MYSQL_PASSWORD" -H "$BK_CI_IP_COMMA"'
+# TODO 在哪? 测试mysql连接及权限。
+
+# 中控机授权
+pcmd -H "$BK_MYSQL_IP" '$CTRL_DIR/bin/grant_mysql_priv.sh -n default-root -u "$BK_CI_MYSQL_USER" -p "$BK_CI_MYSQL_PASSWORD" -H "$(<$CTRL_DIR/.controller_ip)"'
+./bin/setup_mysql_loginpath.sh -n mysql-ci -h "${BK_CI_MYSQL_ADDR%:*}" -u "$BK_CI_MYSQL_USER" -p "$BK_CI_MYSQL_PASSWORD"
+
+hiline "配置 RabbitMQ 插件及账户"
+prepare_rabbitmq_plugin
+pcmd -m rabbitmq 'rabbitmq-plugins enable rabbitmq_delayed_message_exchange'
+echo " 检查所有服务端的 rabbitmq_delayed_message_exchange 插件是否启用"
+pcmd -m rabbitmq 'rabbitmq-plugins list | grep rabbitmq_delayed_message_exchange | grep -F "E*"'
+
+# 复用rabbitmq, 生成密码并创建账户, 刷新03env.
+set_env03 BK_CI_RABBITMQ_ADDR=$BK_RABBITMQ_IP:5672 BK_CI_RABBITMQ_USER=bk_ci BK_CI_RABBITMQ_PASSWORD=$(random_pass) BK_CI_RABBITMQ_VHOST=bk_ci
+
+# TODO 应该仅在使用蓝鲸rabbitmq时，才自动配置权限修改密码。
+# add user不会修改密码，所以强制修改密码。
+pcmd -H "$BK_RABBITMQ_IP" '$CTRL_DIR/bin/add_rabbitmq_user.sh -u "$BK_CI_RABBITMQ_USER" -p "$BK_CI_RABBITMQ_PASSWORD" -h "$BK_CI_RABBITMQ_VHOST" && rabbitmqctl change_password "$BK_CI_RABBITMQ_USER" "$BK_CI_RABBITMQ_PASSWORD"'
+# TODO 测试rabbitmq连接及权限。
+
+hiline "配置 Redis"
+# 复用redis, 读取密码, 刷新03env.
+set_env03 BK_CI_REDIS_HOST=$BK_REDIS_IP BK_CI_REDIS_PASSWORD=$BK_PAAS_REDIS_PASSWORD
+# TODO 测试redis可用性
+
+hiline "配置 ElasticSearch"
+# 复用es7, 读取账户密码, 刷新03env.
+set_env03 BK_CI_ES_REST_ADDR=$BK_ES7_IP BK_CI_ES_USER=elastic BK_CI_ES_PASSWORD=$BK_ES7_ADMIN_PASSWORD
+# TODO 测试ES可用性
+
+hiline "注册到 蓝鲸 ESB"
+./bin/add_or_update_appcode.sh "$BK_CI_APP_CODE" "$BK_CI_APP_TOKEN" "蓝盾" "mysql-paas"  # 注册app。第4个参数即是login-path。
+
+hiline "导入 SQL 文件"
+./bin/sql_migrate.sh -n mysql-ci $BK_PKG_SRC_PATH/ci/support-files/sql/*.sql
+
+hiline "导入 IAM 权限模板"
+./bin/bkiam_migrate.sh -t "$BK_IAM_PRIVATE_URL" -a "$BK_CI_APP_CODE" -s "$BK_CI_APP_TOKEN" $BK_PKG_SRC_PATH/ci/support-files/bkiam/*.json
+
+hiline "导入 CMDB 模板"
+if [ -f  bin/default/blueking_topo_module-ci.tpl ]; then
+  ./bin/create_blueking_service_template.sh bin/default/blueking_service_module-ci.tpl
+  ./bin/create_blueking_topo_template.sh bin/default/blueking_topo_module-ci.tpl
+  echo " 更新 蓝鲸 业务下 蓝盾 集群的拓扑"
+  ./bin/bk-ci-reg-cmdb-topo.sh || {
+    echo "未能更新拓扑, 可能您已经修改过拓扑. 此步骤失败不影响安装."
+  }
+else
+  echo " CMDB 模板不存在, 建议更新部署脚本."
+fi
+
+hiline "注册蓝鲸集群内部使用的私有域名: bk-ci.service.consul 及 ci-auth.service.consul."
+# 在全部 ci-gateway 节点上注册主入口域名: bk-ci.service.consul, 用于在集群内提供web服务.
+pcmd -m ci_gateway '$CTRL_DIR/bin/reg_consul_svc -n bk-ci -p ${BK_CI_HTTP_PORT:-80} -a $LAN_IP -D > /etc/consul.d/service/bk-ci.json 2>/dev/null; consul reload'
+# 在全部ci-auth节点注册 ci-auth.service.consul, 供iam回调使用. 请勿更改此名称. 如不对接蓝鲸, 则可跳过ci-auth相关的操作.
+pcmd -m ci_auth '$CTRL_DIR/bin/reg_consul_svc -n ci-auth -p ${BK_CI_AUTH_API_PORT:-21936} -a $LAN_IP -D > /etc/consul.d/service/ci-auth.json 2>/dev/null; consul reload'
+
+hiline "注册 PaaS 桌面图标"
+./bin/bk-ci-reg-paas-app.sh
+
+sync_common
+hiline "等待 CI 安装包同步完成"
+{ wait $sync_ci_pid || true ; } &>/dev/null
+sync_ci  # 此时再同步，确保万一，如果此前同步成功，此处会很快。
+
+hiline "自动停止 CI 服务, 您也可以提前手动停止: pcmd -m ci 'systemctl stop bk-ci.target'"
+pcmd -m ci 'if diff -q ${BK_PKG_SRC_PATH:-/data/src}/ci/VERSION $BK_HOME/ci/VERSION &>/dev/null; then echo "版本未曾变动, 不自动停止 CI 服务."; else echo "检测到 CI 版本变动, 停止 $LAN_IP 上的 CI 服务: systemctl stop bk-ci.target"; systemctl stop bk-ci.target; true; fi' | grep "版本" || true
+
+hiline "安装 Java"
+pcmd -m ci 'command -v java || $CTRL_DIR/bin/install_java.sh -p "$BK_HOME" -f $BK_PKG_SRC_PATH/java8.tgz'
+
+hiline "安装 CI"
+pcmd -m ci 'cd $CTRL_DIR; export LAN_IP ${!BK_CI_*}; ./bin/install_ci.sh -e ./bin/04-final/ci.env -p "$BK_HOME" 2>&1;'
+
+state_unknown="_"
+state_step="."
+state_step10=":"
+state_ok="+"
+state_fail="!"
+# 进度指示pcmd.
+gauge_pcmd (){
+  [ $# -eq 6 ] || { echo "Usage: gauge_pcmd TIP WAIT_COUNT WAIT_SLEEP PCMD_M PCMD_RUN CMD_CHECK"; exit 1; }
+  local TIP="$1" WAIT_COUNT="$2" WAIT_SLEEP="$3" PCMD_M="$4" PCMD_RUN="$5" CMD_CHECK="$6"
+  local ret=0
+  echo -n "$TIP"
+  PCMD_TIMEOUT=5 pcmd -m "$PCMD_M" "$PCMD_RUN" &>/dev/null || ret=$?
+  case $ret in
+    127) echo >&2 " timeout 返回了 127, 请检查 $CMD_RUN 命令是否存在."; exit 1;;
+    0|124|137|143) ;;  # 等待检查, timeout 124, SIGTERM 128+9, SIGKILL 128+15
+    *) echo -n "$state_fail"; return $ret;;  # 失败则直接退出
+  esac
+  max_retry "$WAIT_COUNT" "$WAIT_SLEEP" "$CMD_CHECK &>/dev/null" \
+    "((_n%10==0))&&echo -n $state_step10 || echo -n $state_step" \
+    && echo -n "$state_ok" || echo -n "$state_unknown"
+  return $?
+}
+
+tip_dns_hosts (){
+  echo ""
+  hiline "强烈建议您在内部 DNS 中注册蓝盾域名: $BK_CI_FQDN" "$hiline_notice"
+  hiline " 如果暂时不便配置 DNS，也可以配置 hosts 。 生成 hosts 供参考：" "$hiline_notice"
+  for ip in ${BK_CI_GATEWAY_IP[@]-}; do
+    printf "%-16s%-42s\n" "$ip" "$BK_CI_FQDN"
+  done
+  echo "# CI 通过 PaaS 登录, 请留意配置 PaaS 域名. ^_^"
+  hiline "（如为云服务器且从公网访问，请修改为对应的公网 IP. ）" "$hiline_notice"
+  echo ""
+}
+
+hiline "分批启动 CI 服务。耗时约 5 分钟。在此期间可完成蓝盾域名配置:"
+tip_dns_hosts
+echo " 启动进度图例: 成功($state_ok) 失败($state_fail) 待定($state_unknown) 进度指示($state_step$state_step10)"
+
+ms_host_suffix="-${BK_CI_CONSUL_DISCOVERY_TAG:-devops}.service.consul"
+stage1_ms="project environment dispatch websocket auth process"
+echo -n "启动"
+ms="gateway"
+gauge_pcmd " $ms" 1 0 "ci_$ms" "systemctl start bk-ci-$ms" "curl -sS $BK_CI_GATEWAY_IP" || {
+  echo " 网关未能启动, 请排除问题后重新执行本脚本, 参考信息如下:";
+  echo "服务status:"
+  pcmd -m ci_$ms "systemctl status bk-ci-$ms | cat" || true
+  echo "服务journal:"
+  pcmd -m ci_$ms "journalctl -xeu bk-ci-$ms | tail" || true
+  exit 1
+}
+
+for ms in $stage1_ms; do
+  wait_host="$ms$ms_host_suffix"
+  gauge_pcmd " $ms" 3 5 "ci_$ms" "systemctl start bk-ci-$ms" "getent hosts $wait_host" || true
+done
+echo -n " 等待启动完成"
+max_retry 9 3 "getent hosts ${stage1_ms// /$ms_host_suffix }$ms_host_suffix &>/dev/null" \
+  "echo -n $state_step" \
+  && echo -n "$state_ok" || echo -n "$state_unknown"
+echo ""
+
+# 预热project的serverlet及db conn，以便节约首页加载的时间。
+pcmd -m ci_project "curl -X PUT http://127.0.0.1:$BK_CI_PROJECT_API_PORT/api/user/projects/project_name/names/demo/validate -H 'accept: application/json' -H 'X-DEVOPS-UID: admin'; true" &>/dev/null &
+project_warm_up_pid=$?
+
+echo -n "后台启动构建机服务: "
+ms=dockerhost
+if [ -z "${BK_CI_DOCKERHOST_IP_COMMA:-}" ]; then
+  echo -n " $ms(SKIP)"
+else
+  # dockerhost没有注册服务发现. 也无需因此阻塞启动过程.
+  gauge_pcmd " $ms" 1 0 "ci_$ms" "systemctl start bk-ci-$ms" "false" || true;
+  echo -n "(STARTED)"
+fi
+ms=agentless
+if [ -z "${BK_CI_AGENTLESS_IP_COMMA:-}" ]; then
+  echo -n " $ms(SKIP)"
+else
+  # agentless没有注册服务发现. 也无需因此阻塞启动过程.
+  gauge_pcmd " $ms" 1 0 "ci_$ms" "systemctl start bk-ci-$ms" "false" || true;
+  echo -n "(STARTED)"
+fi
+echo ""
+
+stage2_ms="quality store artifactory ticket repository image log"
+echo -n "启动"
+for ms in $stage2_ms; do
+  wait_host="$ms$ms_host_suffix"
+  gauge_pcmd " $ms" 3 5 "ci_$ms" "systemctl start bk-ci-$ms" "getent hosts $wait_host" || true
+done
+echo -n " 等待启动完成"
+max_retry 9 3 "getent hosts ${stage2_ms// /$ms_host_suffix }$ms_host_suffix &>/dev/null" \
+  "echo -n $state_step" \
+  && echo -n "$state_ok" || echo -n "$state_unknown"
+echo ""
+
+# wait project
+{ wait $project_warm_up_pid || true ; } &>/dev/null
+
+echo "将继续在后台启动其他服务"
+
+pcmd -m ci 'systemctl start bk-ci.target' &>/dev/null &
+hiline "登录到 dispatch 节点（$BK_CI_DISPATCH_IP）注册公共构建机："
+if [ -z "${BK_CI_DOCKERHOST_IP_COMMA:-}" ]; then
+  echo " 没有配置公共构建机，跳过此步骤。"
+else
+  pcmd -H "$BK_CI_DISPATCH_IP" 'for vm_ip in ${BK_CI_DOCKERHOST_IP[@]:-}; do
+  echo "  注册 dockerhost ip：$vm_ip";
+bash ${BK_PKG_SRC_PATH:-}/ci/scripts/bkci-op.sh add "$vm_ip" enable=false >/dev/null;
+done'
+  sleep 1
+  echo " 展示公共构建机状态。在dockerhost服务启动后，enable列应当自动为true。"
+  echo "pcmd -H "$BK_CI_DISPATCH_IP" 'bash \${BK_PKG_SRC_PATH:-}/ci/scripts/bkci-op.sh list | column -t'"
+  pcmd -H "$BK_CI_DISPATCH_IP" 'bash ${BK_PKG_SRC_PATH:-}/ci/scripts/bkci-op.sh list | column -t'
+fi
+echo ""
+
+echo -n "等待 CI 全部服务启动完毕"
+# 选择misc作为代表 ^_^
+max_retry 150 2 "getent hosts misc$ms_host_suffix &>/dev/null" \
+  "((_n%10==0))&&echo -n $state_step10 || echo -n $state_step" \
+  && echo -n "$state_ok" || echo -n "$state_unknown"
+echo ""
+pcmd -m ci 'FORCE_TTY=1 $CTRL_DIR/bin/bks.sh bk-ci'
+
+echo ""
+hiline "蓝盾部署成功！" "$hiline_success"
+hiline "  您可在 PaaS 工作台里打开 蓝盾" "$hiline_success"
+hiline "    或访问 URL: $BK_CI_PUBLIC_URL" "$hiline_success"
+tip_dns_hosts
+echo "构建资源概况："
+echo "公共构建机（仅 Linux ）：${BK_CI_DOCKERHOST_IP_COMMA:-未配置 ci(dockerhost) ，请在配置流水线时选择“私有构建机”}"
+echo "无编译环境：${BK_CI_AGENTLESS_IP_COMMA:-未配置 ci(agentless) ，流水线中“无编译环境”无法正常工作}"
+echo "$BUILD_PRIVATE_VM_DETAIL"

@@ -1,0 +1,417 @@
+#!/bin/bash
+# shellcheck disable=SC1091
+
+cd ${BASH_SOURCE%/*} 2>/dev/null
+
+source ./utils.fc 
+
+# 以下在agent机器上执行
+check_agent_gsedata () {
+    local pids p pid cnt
+    pids=( $(pidof $BK_GSE_AGENT_HOME/agent/bin/gse_agent) )
+    if (( ${#pids[@]} == 0 )); then
+        echo "$BK_GSE_AGENT_HOME/agent/bin/gse_agent is not running"
+        return 1
+    elif (( ${#pids[@]} == 1 )); then
+        echo "$BK_GSE_AGENT_HOME/agent/bin/gse_agent running abnormaly(only gseMaster running)"
+        return 2
+    fi
+    for p in "${pids[@]}"; do
+        if [[ $(ps h -p "$p" -o comm) = "agentWorker" ]]; then
+            pid="$p"
+            break
+        fi
+    done
+    cnt=$(lsof -p "$pid" -nP -a -i:58625 | grep -c ESTABLISHED)
+    if [[ $cnt -gt 0 ]]; then
+        return 0
+    else
+        echo "gse_agent(@$LAN_IP) has no established connection with gse_data(port:58625)"
+        return 3
+    fi
+}
+
+# 在GSE机器上执行
+_check_gsedata_kafka () {
+    local cnt
+    cnt=$(lsof -c dataWorker -nP -a -i:9092 | grep -c ESTABLISHED)
+    if [[ $cnt -gt 0 ]]; then
+        return 0
+    else 
+        echo "gse_data(@$BK_GSE_IP0) has no established connection with kafka(9092)"
+        return 1
+    fi
+}
+
+check_gsedata_kafka () {
+    d_rcmd "$BK_GSE_IP0" "_check_gsedata_kafka"
+}
+
+check_agent_conf () {
+    if grep -qE 'identityip":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' "$BK_GSE_AGENT_HOME"/agent/etc/agent.conf 2>/dev/null; then
+        return 0
+    else
+        echo "check identityip & agent_ip in $BK_GSE_AGENT_HOME/agent/etc/agent.conf"
+        return 1
+    fi
+}
+
+check_procinfo () {
+    local conf
+    conf=$(grep -E '"(startCmd|type)"' "$BK_GSE_AGENT_HOME"/agent/etc/procinfo.json  | grep -A1 "basereport" | awk '/type/ { print $NF }')
+    if [[ ${conf/,/} -ne 1 ]]; then
+        echo "check type field value in $BK_GSE_AGENT_HOME/agent/etc/procinfo.json of basereport section"
+        echo "it should be 1, otherwise, change it to 1"
+        return 1
+    else
+        echo "check procinfo.json [OK]"
+        return 0
+    fi
+}
+
+check_basereport () {
+    if ! ps -C basereport -o pid,ppid,lstart,args ; then
+        echo "basereport process is not exist."
+        echo "check procinfo.json" 
+        check_procinfo
+    else
+        check_agent_conf
+    fi
+}
+
+# 以下在GSE机器上执行
+check_gse_path () {
+    local flag=0
+    for dir in /var/log/gse /var/lib/gse /var/run/gse; do
+        [[ -d $dir ]] ||  { echo $dir not exist ; flag=1; }
+    done
+    return $flag
+}
+
+check_gse_data_log () {
+    local _p_dataWorker=$( ps h -C dataWorker -o pid )
+    tail -f "$BK_HOME"/public/gse/data/"${_p_dataWorker}"*
+}
+
+# 在包含了zkcli机器上，一般是ZK_IP
+get_snapshot_topic_name () {
+    local zkcli=$BK_PKG_SRC_PATH/gse/server/bin/zkcli
+    echo "gse dataserver config" >&2
+    local data_config=$($zkcli -server "${BK_GSE_ZK_ADDR}" get /gse/config/etc/dataserver/data/1001 2>&1 | grep data_set | python -m json.tool)
+    echo "$data_config" >&2
+
+    local data_set=$(awk '/data_set/ { print $NF }' <<<"$data_config")
+    local biz_id=$(awk '/biz_id/ { print $NF }' <<<"$data_config")
+    local topic=$(sed 's/,//g; s/\"//g' <<<"${data_set}${biz_id}")
+    echo "$topic"
+}
+
+check_redis_storage_config () {
+    local zkcli=$BK_PKG_SRC_PATH/gse/server/bin/zkcli
+    local host=$($zkcli -server zk.service.consul:2181 get /gse/config/etc/dataserver/storage/all/0_1 | jq -r '.[].host')
+    if [[ $host =~ ^redis ]]; then
+        return 0
+    else
+        echo "$($zkcli -server zk.service.consul:2181 get /gse/config/etc/dataserver/storage/all/0_1)"
+        return 1
+    fi
+}
+
+# 在KAFKA机器上
+show_kafka_all_topic () {
+    local zkaddr=$(awk -F'=' '/common_kafka/ { print $2 }' $INSTALL_PATH/service/kafka/config/server.properties)
+    $INSTALL_PATH/service/kafka/bin/kafka-topics.sh --list --zookeeper $zkaddr 
+}
+
+_check_kafka_topic_livedata () {
+    local topic=$1
+    local pattern="$2"
+    local timeout="60s"
+    timeout -s TERM --preserve-status $timeout /opt/kafka/bin/kafka-console-consumer.sh \
+    --bootstrap-server kafka.service.consul:9092 --topic "$topic" \
+    | grep -q -w -m 1 "$pattern" 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+        echo "there is a message matched pattern(<$pattern>) from kafka topic <$topic>"
+        return 0
+    else
+        echo "After $timeout(timeout), there isn't a message matched pattern(<$pattern>) from kafka topic <$topic>"
+        return 1
+    fi
+
+}
+
+check_kafka_snapshot_data () {
+    echo "try to find ip<$BK_KAFKA_IP0> in kafka topic(0bkmonitor_10010)"
+    echo "this may take a while, at most for one minute."
+    d_rcmd "$BK_KAFKA_IP0" "_check_kafka_topic_livedata 0bkmonitor_10010 $BK_KAFKA_IP0"
+}
+
+# 需要既是zk又是kafka，否则需要分步执行
+show_snapshot_in_kafka () {
+    show_kafka_topic_livedata "0bkmonitor_1001"
+}
+
+check_kafka_brokers_id () {
+    local ids
+    local ids=$("$BK_PKG_SRC_PATH/gse/server/bin/zkcli" --server zk.service.consul:2181 list /common_kafka/brokers/ids)
+    [[ $(wc -l <<<"$ids") -eq ${#BK_KAFKA_IP[@]} ]]
+}
+
+_check_bkdata_crontab () {
+    if crontab -l | grep -v '^#' | grep -q update_cc_cache.sh; then
+        return 0
+    else
+        echo "there is no update_cc_cache.sh entry in $BKDATA_IP's crontab"
+        return 1
+    fi
+}
+
+check_bkdata_crontab () {
+    d_rcmd "$BKDATA_IP" "_check_bkdata_crontab"
+}
+
+check_snapshot_in_redis () {
+    timeout -s INT --preserve-status 60s $PKG_SRC_PATH/service/redis/bin/redis-cli \
+    -h $REDIS_IP -p $REDIS_PORT -a $REDIS_PASS subscribe 2_snapshot \
+    | grep -q -m 1 "$LAN_IP[\]"  2>/dev/null
+    if [[ $? -eq 0 ]]; then
+        echo "Found $LAN_IP in redis 2_snapshot"
+        return 0
+    else
+        echo "No $LAN_IP entry found in 2_snapshot"
+        return 1
+    fi
+}
+
+check_transfer_status () {
+    local p1 p2 d1 d2
+    echo -n "get transfer processing 1001 metrics(p1)"
+    p1=$(dig +short transfer.bkmonitorv3.service.consul \
+        | xargs -n1 -Iip curl -s ip:10202/metrics \
+        | awk '/transfer_pipeline_backend_handled_total\{id="1001"/ { sum+=strtonum($NF) } END { print sum } ')
+    echo " $p1"
+    echo -n "get transfer dropped 1001 metrics(d1)"
+    d1=$(dig +short transfer.bkmonitorv3.service.consul \
+        | xargs -n1 -Iip curl -s ip:10202/metrics \
+        | awk '/transfer_pipeline_backend_dropped_total\{id="1001"/ { sum+=strtonum($NF) } END { print sum } ')
+    echo " $d1"
+    echo "wait 60 seconds..."
+    sleep 61
+    echo -n "get transfer processing 1001 metrics(p2)"
+    p2=$(dig +short transfer.bkmonitorv3.service.consul \
+        | xargs -n1 -Iip curl -s ip:10202/metrics \
+        | awk '/transfer_pipeline_backend_handled_total\{id="1001"/ { sum+=strtonum($NF) } END { print sum } ')
+    echo " $p2"
+    echo -n "get transfer dropped 1001 metrics(d2)"
+    d2=$(dig +short transfer.bkmonitorv3.service.consul \
+        | xargs -n1 -Iip curl -s ip:10202/metrics \
+        | awk '/transfer_pipeline_backend_dropped_total\{id="1001"/ { sum+=strtonum($NF) } END { print sum } ')
+    echo " $d2"
+    if [[ $p2 -gt $p1 ]]; then
+        echo "transfer is processing 1001 data"
+        if [[ $d2 -gt $d1 ]]; then
+            echo "transfer is dropping 1001 data"
+            return 1
+        fi
+    else
+        echo "transfer is not processing 1001 data"
+        return 1
+    fi
+    return 0
+}
+
+d_rcmd () {
+    local dst
+    dst="$1"
+    shift 1
+    if [[ $dst =~ ^[0-9\.,]+$ ]]; then
+        "$CTRL_DIR"/pcmd.sh -H "$dst" "source $CTRL_DIR/.rcmdrc; source $CTRL_DIR/diagnose.rc; export HASTTY=1; $@"
+    elif [[ $dst =~ ^[a-z0-9]+$ ]]; then
+        "$CTRL_DIR"/pcmd.sh -m "$dst" "source $CTRL_DIR/.rcmdrc; source $CTRL_DIR/diagnose.rc; export HASTTY=1; $@"
+    else
+        echo "unknow $dst format"
+        return 1
+    fi
+}
+
+check_influxdb_snapshot () {
+    local result timestamp pattern result_ts
+    result=$(curl -s -G "http://$BK_INFLUXDB_BKMONITORV3_IP0:$INFLUXDB_PORT/query" \
+    -u "$BK_INFLUXDB_ADMIN_USER:$BK_INFLUXDB_ADMIN_PASSWORD" \
+    --data-urlencode "db=system_2" \
+    --data-urlencode "epoch=s" \
+    --data-urlencode "q=SELECT  * FROM system_load_2 WHERE \"ip\" = '$LAN_IP' order by time desc limit 1")
+    timestamp=$(date +%s)
+    pattern=${timestamp}
+
+    result_ts=$(grep -Eo 'values\":\[\[[0-9]+,' <<<"$result" | grep -Eo '[0-9]+')
+
+    if [[ -n $result_ts ]]; then
+        diff=$(( timestamp - result_ts ))
+        diff=${diff#-}  # abs(diff)
+        if (( diff < 180 )); then   # within 3 minutes
+            return 0
+        else
+            echo "measurements in system_2, timestamp is outside of 3 minutes"
+        fi
+    else
+        echo "no measurements in system_2. response is:"
+    fi
+    echo "$result"
+    return 1
+}
+
+do_check() {
+   local item=$1
+
+   echo -n "start <<$item>> ... "
+   message=$($item)
+   if [ $? -eq 0 ]; then
+       echo "[OK]"
+   else
+       echo "[FAILED]"
+       echo -e "\t$message"
+       return 1
+   fi
+}
+
+check_snapshot () {
+    local checks=(
+                check_gsedata_kafka     # 检查gse_data和kafka的9092是否有链接
+                check_kafka_brokers_id  # 判断kafka broker数量是否等于${#KAFKA_IP[@]}
+                check_kafka_snapshot_data # 判断kafka里是否有本机的快照数据
+                check_transfer_status    # 检查transfer是否正常处理1001的dataid
+                check_basereport        # 检查basereport进程是否存在，且配置文件有自动拉起
+                check_agent_gsedata     # 检查gse_agent和gse_data之间有tcp链接建立
+                check_redis_storage_config  # 检查zk里存储的redis配置是否正确
+                check_influxdb_snapshot # 检查influxdb是否有数据
+    )
+    for c in ${checks[@]}; do
+        do_check $c || break
+    done
+}
+
+check_license_svr () {
+    local cert_string=$(awk 'BEGIN { ORS="\\n" } 1' $BK_HOME/cert/platform.cert)
+    local platform="open_paas"
+    local timestamp=$(date -u +"%F %T")
+    local json_msg
+
+    printf -v json_msg '{ "certificate": "%s", "platform": "%s", "requesttime": "%s" }\n' \
+        "$cert_string" "$platform" "$timestamp"
+    
+    local res=$(curl -s -k -d "$json_msg" -H "Content-Type: application/json" -X POST https://$BK_LICENSE_PRIVATE_ADDR/certificate)
+    if [[ $res =~ success ]]; then
+        return 0
+    else
+        echo "$res"
+        return 1
+    fi
+}
+
+check_esb_job_api () {
+    local app_code app_token
+    local esb_job_api="http://paas.service.consul/api/c/compapi/v2/job/fast_execute_script/"
+    read app_code app_token <<<"$(grep -m1 ^bk_ $CTRL_DIR/.app.token)"
+    curl -X POST -d '{
+        "bk_app_code": "'$app_code'",
+        "bk_app_secret": "'$app_token'",
+        "bk_username": "admin",
+        "bk_biz_id": 2,
+        "script_content": "ZGF0ZQo=",
+        "script_timeout": 60,
+        "account": "root",
+        "is_param_sensitive": 0,
+        "script_type": 1,
+        "ip_list": [
+            {
+                "bk_cloud_id": 0,
+                "ip": "'$LAN_IP'"
+            }
+        ]
+    }' $esb_job_api
+}
+
+check_inner_domain () {
+    local domain=${1:-paas.service.consul}
+    local module=$(cut -d. -f1 <<<"$domain")
+    # get dig result 
+    local result=$(dig $domain)
+    # effective dns svr
+    local e_dns_svr=$(echo "$result" | awk '/^;; SERVER:/ { print substr($3,1,9) }')
+    # answer section
+    local answer=$(echo "$result" | sed -n '/^;; ANSWER SECTION/,/^$/p')
+    # consul process
+    local consul_pid=$(pgrep -x consul)
+
+    if grep nameserver /etc/resolv.conf | grep -Ev '^\s*#' | grep -qw 127.0.0.1 2>/dev/null; then
+        # resolv.conf contains 127.0.0.1
+        if [[ "$e_dns_svr" != "127.0.0.1" ]]; then
+            # it means resolver skip 127.0.0.1, which consul fails
+            echo "check consul process..."
+            ps -C consul -o pid,lstart,args || echo "consul isn't started"
+        else
+            # consul exists, check answer
+            if [[ $(echo "$answer" | wc -l) -ge 2 ]]; then
+                echo "$domain 解析正确"
+            else
+                echo "$domain 解析为空，请检查对应进程是否启动。"
+                echo "检查的方法如下：找到$INSTALL_PATH/etc/consul.d/$module.json文件"
+                echo "复制文件内定义的check.scripts的命令，并运行。检查是否RUNNING，返回码为0"
+            fi
+        fi
+    else
+        echo "/etc/resolv.conf中没有配置nameserver 127.0.0.1"
+    fi
+}
+
+check_cert_passwd () {
+    local env_passwd_file=$PKG_SRC_PATH/$(< $PKG_SRC_PATH/ENTERPRISE).env
+    source $env_passwd_file 
+
+    local gse_pass=$(awk '$1 == "gse_job_api_client.p12"{print $NF}' $PKG_SRC_PATH/cert/passwd.txt)
+    local job_pass=$(awk '$1 == "job_server.p12"{print $NF}' $PKG_SRC_PATH/cert/passwd.txt)
+
+    if [[ "$gse_pass" = "$GSE_KEYTOOL_PASS" ]]; then
+        if keytool -list -v -keystore $INSTALL_PATH/cert/gse_job_api_client.keystore -storepass "$gse_pass" &>/dev/null; then
+            echo "gse_job_api passwd OK"
+        else
+            echo "gse_job_api passwd FAILED"
+            echo "请在job机器上执行命令：  cd $CTRL_DIR && source install.rc && gen_job_cert , 然后重启job进程"
+            return 1
+        fi
+    else
+        echo "gse的证书密码和环境变量不一致（$PKG_SRC_PATH/cert/passwd.txt <-> $env_passwd_file"
+        return 1
+    fi
+    if [[ "$job_pass" = "$JOB_KEYTOOL_PASS" ]]; then
+        if keytool -list -v -keystore $INSTALL_PATH/cert/job_server.keystore -storepass "$job_pass" &>/dev/null; then
+            echo "job_server passwd OK"
+        else
+            echo "gse_job_api passwd FAILED"
+            echo "请在job机器上执行命令：  cd $CTRL_DIR && source install.rc && gen_job_cert , 然后重启job进程"
+            return 1
+        fi
+    else
+        echo "job的证书密码和环境变量不一致（$PKG_SRC_PATH/cert/passwd.txt <-> $env_passwd_file"
+        return 1
+    fi
+}
+
+check_gse_status_api () {
+    local app_code app_token
+    read app_code app_token <<<"$(grep -m1 ^bk_ $CTRL_DIR/.app.token)"
+    local gse_status_api="http://$PAAS_FQDN:$DEFAULT_HTTP_PORT/api/c/compapi/v2/gse/get_agent_status/"
+    curl -X POST -d '{
+        "bk_app_code": "'$app_code'",
+        "bk_app_secret": "'$app_token'",
+        "bk_username": "admin",
+        "bk_supplier_account": "0",
+        "hosts": [
+        {
+            "ip": "'$LAN_IP'",
+            "bk_cloud_id": 0
+        }
+        ]
+    }' $gse_status_api
+}

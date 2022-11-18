@@ -1,0 +1,5 @@
+10.0.5.1 license,consul,appo,beanstalk,monitorv3(influxdb-proxy),influxdb(bkmonitorv3),ssm,es7,mongodb,gse,redis,usermgr
+10.0.5.2 license,consul,paas,cmdb,beanstalk,monitorv3(influxdb-proxy),monitorv3(monitor),mysql,gse,redis,rabbitmq,appo
+10.0.5.3 nginx,zk(config),redis_sentinel,kafka(config),fta,iam,paas,mongodb,monitorv3(transfer),monitorv3(monitor),log(api),log(grafana)
+10.0.5.4 nginx,zk(config),redis_sentinel,kafka(config),fta,nfs,influxdb(bkmonitorv3),usermgr,log(api),monitorv3(transfer),job,iam,es7
+10.0.5.5 cmdb,job,zk(config),kafka(config),rabbitmq,consul,redis_sentinel,ssm,nodeman(nodeman),monitorv3(grafana),es7,mongodb,appt

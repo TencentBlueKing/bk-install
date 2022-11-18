@@ -1,0 +1,59 @@
+#!/bin/bash -
+
+# 用途：通过consul的HTTP API注册服务和健康检查到本机的consul agent
+# consul 1.0以上版本支持consul services register, 但没有healthcheck 
+# 依赖 jq 命令来处理json字符串
+
+set -o nounset 
+# 服务名，多个服务实例可以共用同样的NAME
+NAME=
+
+# 服务ID，在每个agent上，必须保证唯一，如果不提供，则默认用NAME
+ID=
+
+# consul 注册接口路径
+readonly AGENT_DEREG_SVC_API="/v1/agent/service/deregister"
+readonly AGENT_LIST_SVC_API="/v1/agent/services"
+CONSUL_HTTP_URL="http://127.0.0.1:8500"
+
+PROGRAM=$(basename $0)
+
+usage () {
+	echo "Usage: $PROGRAM -n 服务名称 -p 服务端口 -a 服务地址 [-i consul的HTTP服务路径]"
+	echo "       其中服务名称和服务端口和服务地址必须提供，其余有默认值。"
+}
+
+usage_and_exit () {
+	usage
+	exit $1
+}
+
+get_local_svc_id () {
+	curl -s "$LIST_SVC_API" |  jq -r '.[] | [.ID] | @tsv'
+}
+
+while getopts i:n:a:p:P: arg; do
+	case $arg in 
+		i) CONSUL_HTTP_URL="$OPTARG" ;;
+		n) NAME=$OPTARG ;;
+		a) ADDRESS=$OPTARG ;;
+		p) PORT=$OPTARG ;;
+		*) usage_and_exit 0 ;;
+
+	esac
+done
+shift $((OPTIND - 1))
+
+command -v jq >/dev/null 2>&1 || { echo >&2 "jq 命令不存在，请先安装它。"; exit 1; }
+
+DEREG_SVC_API=${CONSUL_HTTP_URL}${AGENT_DEREG_SVC_API}
+LIST_SVC_API=${CONSUL_HTTP_URL}${AGENT_LIST_SVC_API}
+[[ -z "$NAME" || -z "$PORT" || -z "$ADDRESS" ]] && usage_and_exit 1
+
+ID=$(get_local_svc_id | grep -E "^${NAME}-[0-9]+$")
+if [[ -n "$ID" ]]; then
+    curl -s -X PUT "$DEREG_SVC_API"/$ID
+else 
+    echo "$NAME doesn't exist or already deregistered, ignore..."
+    exit 2
+fi
