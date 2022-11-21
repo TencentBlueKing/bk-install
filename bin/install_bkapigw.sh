@@ -36,6 +36,8 @@ PYTHON_PATH=/opt/py36_e/bin/python3.6
 
 MODULE=bk_apigateway
 
+RPM_DEP=(mysql-devel)
+
 ENV_FILE=
 BIND_ADDR=127.0.0.1
 
@@ -164,6 +166,10 @@ install -o blueking -g blueking -m 755 -d /etc/blueking/env
 install -o blueking -g blueking -m 755 -d "$PREFIX/$MODULE"
 install -o blueking -g blueking -m 755 -d "$PREFIX/public/$MODULE"
 
+ # 安装rpm依赖包，如果不存在
+ if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
+     yum -y install "${RPM_DEP[@]}"
+ fi
 
 # 拷贝pip pkgs
 rsync -a --delete "${MODULE_SRC_DIR}"/$MODULE/support-files "$PREFIX/$MODULE/"
