@@ -160,6 +160,9 @@ case $1 in
         fi
         gen_mysql_password BK_USERMGR "$(rndpw 12)"
         gen_rabbitmq_password BK_USERMGR "$(rndpw 12)"
+        if [[ -z "$BK_USERMGR_REDIS_PASSWORD" ]]; then
+            printf "%s=%q\n" "BK_USERMGR_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
+        fi
         if [[ -z "$BK_USERMGR_REDIS_SENTINEL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_USERMGR_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
         fi
@@ -330,6 +333,9 @@ case $1 in
         if [[ -z "$BK_AUTH_MYSQL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_AUTH_MYSQL_PASSWORD" "$(rndpw 12)"
         fi
+        if [[ -z "$BK_AUTH_REDIS_PASSWORD" ]]; then
+            gen_redis_password "BK_AUTH" "$(rndpw 12)"
+        fi
         if [[ -z "$BK_AUTH_REDIS_SENTINEL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_AUTH_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
         fi
@@ -344,7 +350,7 @@ case $1 in
         if [[ -z "$BK_IAM_MYSQL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_IAM_MYSQL_PASSWORD" "$(rndpw 12)"
         fi
-        if [[ -z "$BK_IAM_MYSQL_PASSWORD" ]]; then
+        if [[ -z "$BK_IAM_REDIS_PASSWORD" ]]; then
             gen_redis_password "BK_IAM" "$(rndpw 12)"
         fi
         if [[ -z "$BK_IAM_REDIS_SENTINEL_PASSWORD" ]]; then
@@ -562,6 +568,9 @@ case $1 in
         fi
         if [[ -z "$BK_APIGW_APISIX_ADMIN_KEY" ]]; then
             printf "%s=%q\n" "BK_APIGW_APISIX_ADMIN_KEY" "$(rndpw 32)"
+        fi
+        if [[ -z "$BK_APIGW_REDIS_SENTINEL_PASSWORD" ]]; then
+            printf "%s=%q\n" "BK_APIGW_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
         fi
         ;;
     *)

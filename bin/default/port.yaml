@@ -342,4 +342,6 @@ apigw:
   apigateway:
     port: 6006
     consul: apigw-apigateway
-  
+  thunderstone:
+    port: 6012
+    consul:

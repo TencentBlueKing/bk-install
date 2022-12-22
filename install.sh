@@ -576,7 +576,7 @@ install_auth () {
     emphasize "migrate $module sql"
     migrate_sql $module
     for project in ${projects[@]}; do
-        emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
+        emphasize "install ${target_name}-${project} on host: ${BK_AUTH_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
                  "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_AUTH_IP_COMMA}"
@@ -742,7 +742,7 @@ install_apigw () {
     emphasize "sync and install python on host: ${BK_APIGW_IP_COMMA}"
     install_python $module
 
-    for project in dashboard bk-esb operator apigateway; do
+    for project in dashboard bk-esb operator apigateway api-support; do
         emphasize "register consul $project on host: ${ip}"
         reg_consul_svc ${_project_consul["${module},${project}"]} ${_project_port["${module},${project}"]} "${BK_APIGW_IP_COMMA}"
     done
