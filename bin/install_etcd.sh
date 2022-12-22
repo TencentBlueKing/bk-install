@@ -47,6 +47,8 @@ ETCD_DATA_DIR=${ETCD_DATA_DIR:-/var/lib/etcd}
 [[ -d "$ETCD_DATA_DIR" ]] && mkdir -p "$ETCD_DATA_DIR"
 [[ -d "$ETCD_CERT_PATH" ]] && mkdir -p "$ETCD_CERT_PATH"
 
+chown -R blueking.blueking "$ETCD_CERT_PATH"
+
 # 写入环境变量文件
 if [[ $PROTOCOL = "https" ]]; then
     cat > /etc/sysconfig/etcd-ssl <<EOF
