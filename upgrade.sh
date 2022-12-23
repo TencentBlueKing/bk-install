@@ -148,5 +148,16 @@ case "$MODULE" in
         echo "start upgade $MODULE"
         $PCMD -m lesscode "$CTRL_DIR/bin/release_lesscode.sh -u -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -e $CTRL_DIR/bin/04-final/${MODULE}.env"
         ;;
+    apigw|bkapigw)
+        echo "sync $MODULE to remote hosts"
+        "$SELF_DIR"/sync.sh "${MODULE#bk}" "$BK_PKG_SRC_PATH/bk_apigateway/" "$BK_PKG_SRC_PATH/bk_apigateway/"
+
+        # 导入sql文件
+        "$SELF_DIR"/bin/sql_migrate.sh -n mysql-default "$BK_PKG_SRC_PATH"/bk_apigateway/support-files/sql/*.sql
+
+        echo "update $MODULE on all $MODULE hosts"
+        $PCMD -m "${MODULE#bk}" "$CTRL_DIR/bin/release_apigw.sh -u -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -e $CTRL_DIR/bin/04-final/bkapigw.env"
+        ;;
+
     *) usage ;;
 esac
