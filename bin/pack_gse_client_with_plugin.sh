@@ -25,7 +25,7 @@ NEED_RENDER=                    # 是否需要渲染agent配置，默认不渲�
 
 # plugins pack with gse client/proxy 
 BASE_PLUGINS=(
-    exceptionbeat gsecmdline bkmonitorbeat bkunifylogbeat
+    exceptionbeat gsecmdline bkmonitorbeat bkunifylogbeat bk-collector
 )
 
 # error exit handler
