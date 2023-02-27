@@ -218,14 +218,9 @@ cluster.initial_master_nodes: $ip_list
 cluster.max_shards_per_node: 10000
 
 EOF
-    log "修改jvm最大内存堆大小为物理内存的一半"
-    if [[ ${JVM_MEM} -eq 0 ]] ;then
-        sed -i "s/^## -Xmx.*g/-Xmx256m/g" /etc/elasticsearch/jvm.options
-        sed -i "s/^## -Xms.*g/-Xms256m/g" /etc/elasticsearch/jvm.options
-    else
-        sed -i "s/^## -Xmx.*g/-Xmx${JVM_MEM}g/g" /etc/elasticsearch/jvm.options
-        sed -i "s/^## -Xms.*g/-Xms${JVM_MEM}g/g" /etc/elasticsearch/jvm.options
-    fi
+    log "修改jvm最大内存堆大小为2G"
+    sed -i "s/^## -Xmx.*g/-Xmx2g/g" /etc/elasticsearch/jvm.options
+    sed -i "s/^## -Xms.*g/-Xms2g/g" /etc/elasticsearch/jvm.options
 else
     log "部署${SERVER_NUM}节点集群ES"
     # 生成 es 配置文件
@@ -253,9 +248,9 @@ cluster.routing.allocation.same_shard.host: true
 cluster.initial_master_nodes: $ip_list
 cluster.max_shards_per_node: 10000
 EOF
-    log "修改jvm最大内存堆大小为物理内存的一半"
-    sed -i "s/^## -Xmx.*g/-Xmx${JVM_MEM}g/g" /etc/elasticsearch/jvm.options
-    sed -i "s/^## -Xms.*g/-Xms${JVM_MEM}g/g" /etc/elasticsearch/jvm.options
+    log "修改jvm最大内存堆大小为2G"
+    sed -i "s/^## -Xmx.*g/-Xmx2g/g" /etc/elasticsearch/jvm.options
+    sed -i "s/^## -Xms.*g/-Xms2g/g" /etc/elasticsearch/jvm.options
 fi
 
 # 启动es
