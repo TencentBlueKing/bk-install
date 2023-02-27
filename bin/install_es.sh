@@ -233,7 +233,7 @@ node.name: elasticsearch-$myid
 node.attr.tag: cold
 path.data: $DATA_DIR/
 path.logs: $LOG_DIR/
-bootstrap.memory_lock: false
+bootstrap.memory_lock: true
 bootstrap.system_call_filter: false
 network.host: $BIND_ADDR
 http.port: $ES_REST_PORT

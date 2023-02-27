@@ -121,6 +121,16 @@ if ! [[ $BIND_ADDR = "127.0.0.1" || $BIND_ADDR = "localhost" ]]; then
     sed -i "/bindIp/s/127.0.0.1/127.0.0.1, $BIND_ADDR/" /etc/mongod.conf
 fi
 
+log "限制mongodb的wiredTiger内存 /etc/mongod.conf"
+sed -i "s/#\? *engine: *wiredTiger.*/    engine: wiredTiger\n      wiredTiger:\n        engineConfig:\n          cacheSizeGB: 4/" "/etc/mongod.conf"
+
+# Check if the configuration file was modified
+if ! grep -q "cacheSizeGB: 4" "/etc/mongod.conf"; then
+    echo "WiredTiger cache size has been set to 4."
+else
+    echo "WiredTiger cache size is already set to 4."
+fi
+
 # 增加logrotate参数为reopen
 sed -i '/logRotate/d' /etc/mongod.conf 
 sed -i '/logAppend/a\  logRotate: reopen' /etc/mongod.conf
