@@ -6,11 +6,56 @@ action_kafka () {
 action_paas () {
     local action=$1
     local project=$2
-    if [[ -z ${project} ]]; then
-        systemctl $action bk-paas.target
-    else
-        systemctl ${action} bk-paas-${project}.service
-    fi
+    case ${action} in
+        stop)
+            if [[ ! -z ${project} ]]; then
+                echo "trying to stop bk-paas-${project}"
+                docker_id=$(docker ps | awk -v PROJ="^bk-paas-${project}" '$NF ~ PROJ {print $1; exit}')
+                if docker stop -t 1 $docker_id >/dev/null; then
+                    echo "stop bk-paas-${project} success!"
+                fi
+            else
+                while read docker_id project_name ignore; do
+                    echo "trying to stop ${project_name}"
+                    if docker stop -t 1 $docker_id >/dev/null; then
+                        echo "stop ${project_name} success!"
+                    fi
+                done < <(docker ps | awk -v PROJ="^bk-paas-" '$NF ~ PROJ {print $1, $NF}')
+            fi
+        ;;
+        start)
+            if [ ! -z "$project" ]; then
+                echo "trying to start bk-paas-${project}"
+                docker_id=$(docker ps -a | awk -v PROJ="^bk-paas-${project}" '$NF ~ PROJ {print $1; exit}')
+                if docker start $docker_id >/dev/null; then
+                    echo "start bk-paas-${project} success!"
+                fi
+            else
+                while read docker_id project_name ignore; do
+                    echo "trying to start ${project_name}"
+                    if docker start $docker_id >/dev/null; then
+                        echo "start ${project_name} success!"
+                    fi
+                done < <(docker ps -a | awk -v PROJ="^bk-paas-" '$NF ~ PROJ {print $1, $NF}')
+            fi            
+        ;;
+        restart)
+            if [ ! -z "$project" ]; then
+                echo "trying to restart bk-paas-${project}"
+                docker_id=$(docker ps -a | awk -v PROJ="^bk-paas-${project}" '$NF ~ PROJ {print $1; exit}')
+                if docker restart -t 1 $docker_id >/dev/null; then
+                    echo "restart bk-paas-${project} success!"
+                fi
+            else
+                while read docker_id project_name ignore; do
+                    echo "trying to start ${project_name}"
+                    if docker restart -t 1 $docker_id >/dev/null; then
+                        echo "restart ${project_name} success!"
+                    fi
+                done < <(docker ps -a | awk -v PROJ="^bk-paas-" '$NF ~ PROJ {print $1, $NF}')
+            fi            
+        ;;
+    esac
 }
 
 action_usermgr () {
