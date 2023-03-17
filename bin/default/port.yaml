@@ -321,9 +321,6 @@ beanstalk:
 
 # 6000-6020 为 apigw 预留端口
 apigw:
-  api-support:
-    port: 6002
-    consul: apigw-support 
   dashboard:
     port: 6000
     consul: apigw-dashboard

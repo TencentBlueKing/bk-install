@@ -667,13 +667,13 @@ install_apigw () {
     # 安装 etcd
     install_etcd
 
-    for project in dashboard bk-esb operator apigateway api-support; do
+    for project in dashboard bk-esb operator apigateway; do
         emphasize "register consul $project on host: ${ip}"
         reg_consul_svc ${_project_consul["${module},${project}"]} ${_project_port["${module},${project}"]} "${BK_APIGW_IP_COMMA}"
     done
 
     # 安装 apigw
-    for project in dashboard api-support bk-esb; do
+    for project in dashboard bk-esb; do
         project_port=${_project_port["${module},${project}"]}
         project_consul=${_project_consul["${module},${project}"]}
         for ip in "${BK_APIGW_IP_COMMA[@]}"; do 
