@@ -200,7 +200,7 @@ fi
 chown -R blueking.blueking "$PREFIX/open_paas" "$LOG_DIR"
 
 # 导入镜像
-docker load < ${MODULE_SRC_DIR}/open_paas/support-files/images/bk-paas-*.tar
+docker load < ${MODULE_SRC_DIR}/open_paas/support-files/images/bk-paas-*.tar.gz
 
 case $PAAS_MODULE in
     login|console|esb|paas|apigw|appengine)

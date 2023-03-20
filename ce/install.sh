@@ -577,9 +577,12 @@ _install_paas_project () {
     # 创建paas相关数据库
     emphasize "migrate ${module} sql"
     migrate_sql $module
-    # paas服务器同步并安装python
+    # # paas服务器同步并安装python
     emphasize "sync and install python on host: ${BK_PAAS_IP_COMMA}"
     install_python $module
+    # install docker
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
 
     # 要加判断传入值是否正确
     for project in ${project[@]}; do
