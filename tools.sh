@@ -416,7 +416,8 @@ get_docker_service_status (){
     else
         name="bk-${module}"
     fi
-    docker ps --filter "name=${name}" --format 'table {{.Names}}\t{{.Status}}\t{{.ID}}'
+    # todo: 容器不存在时的输出
+    docker ps -a --filter "name=${name}" --format 'table {{.Names}}\t{{.Status}}\t{{.ID}}'
 }
 
 get_service_status () {
