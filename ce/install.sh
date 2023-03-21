@@ -169,7 +169,7 @@ install_kafka () {
 }
 
 install_mysql_common () {
-    _install_mysql $@
+    _install_mysql "$@"
     _initdata_mysql
 }
 
@@ -506,7 +506,7 @@ install_auth () {
     migrate_sql $module
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_AUTH_IP_COMMA}"
-        "${SELF_DIR}"/pcmd.sh -m $module \
+        "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
                  "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_AUTH_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
@@ -577,9 +577,12 @@ _install_paas_project () {
     # 创建paas相关数据库
     emphasize "migrate ${module} sql"
     migrate_sql $module
-    # paas服务器同步并安装python
+    # # paas服务器同步并安装python
     emphasize "sync and install python on host: ${BK_PAAS_IP_COMMA}"
     install_python $module
+    # install docker
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
 
     # 要加判断传入值是否正确
     for project in ${project[@]}; do
@@ -683,8 +686,7 @@ install_apigw () {
         done
     done
 
-
-    emphasize "add or update appocode ${BK_APIGW_APP_CODE}"
+    emphasize "add or update app_code ${BK_APIGW_APP_CODE}"
     add_or_update_appcode "$BK_APIGW_APP_CODE" "$BK_APIGW_APP_SECRET"
 
     emphasize "sign host as module"
@@ -1245,7 +1247,7 @@ install_lesscode () {
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc nginx "_sign_host_as_module consul-template"
-    
+
     emphasize "set bk_lesscode as desktop display by default"
     set_console_desktop "bk_lesscode"
 }

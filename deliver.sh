@@ -61,6 +61,8 @@ case $1 in
     paas|open_paas)
         emphasize "sync $BK_PKG_SRC_PATH/open_paas/ to module: paas" 
         "${SELF_DIR}"/sync.sh "paas" "$BK_PKG_SRC_PATH/open_paas/" "$BK_PKG_SRC_PATH/open_paas/"
+        emphasize "sync $BK_PKG_SRC_PATH/image/ to module: $1" 
+        "${SELF_DIR}"/sync.sh "$1" "$BK_PKG_SRC_PATH/image/" "$BK_PKG_SRC_PATH/image/"
         # 对于nfs要特殊处理
         if [ "${#BK_NFS_IP[@]}" -ne 0 ];then 
             chown -R blueking.blueking "${BK_PKG_SRC_PATH}"/open_paas/paas/media

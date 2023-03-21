@@ -406,6 +406,20 @@ get_spic_bk_service_status (){
     "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
 } 
 
+get_docker_service_status (){
+    local module=$1
+    local service=${2:-}
+    export FORCE_TTY=1
+    # 暂时简单匹配处理
+    if [[ "$service" != '' ]]; then
+        name="bk-${module}-${service}"
+    else
+        name="bk-${module}"
+    fi
+    # todo: 容器不存在时的输出
+    docker ps -a --filter "name=${name}" --format 'table {{.Names}}\t{{.Status}}\t{{.ID}}'
+}
+
 get_service_status () {
     local service=()
     export FORCE_TTY=1

@@ -37,7 +37,7 @@ install_beanstalk () {
     emphasize  "install beanstalk on host: ${BK_BEANSTALK_IP_COMMA}"
     ${SELF_DIR}/pcmd.sh -m beanstalk "yum install  -y beanstalkd && systemctl enable --now beanstalkd && systemctl start beanstalkd"
     # 注册consul
-    emphasize "register ${_project_port["$module,default"]}  consul server  on host: ${BK_BEANSTALK_IP_COMMA}"
+    emphasize "register ${_project_port["$module,default"]}  consul server  on host: ${BK_BEANSTALK_IP_COMMA} "
     reg_consul_svc "${_project_consul["$module,default"]}" "${_project_port["$module,default"]}" "${BK_BEANSTALK_IP_COMMA}"
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -102,7 +102,6 @@ install_bkenv () {
                     license.env 
                     bkiam.env  
                     bkssm.env 
-                    bkapigw.env
                     bkauth.env
                     usermgr.env 
                     paasagent.env 
@@ -115,7 +114,8 @@ install_bkenv () {
                     bklog.env 
                     lesscode.env
                     fta.env
-                    bkiam_search_engine.env)
+                    bkiam_search_engine.env
+                    bkapigw.env)
 
     # 生成bkrc
     set +e
@@ -651,6 +651,9 @@ _install_paas_project () {
     # paas服务器同步并安装python
     emphasize "sync and install python on host: ${BK_PAAS_IP_COMMA}"
     install_python $module
+    # install docker
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
 
     # 要加判断传入值是否正确
     for project in ${project[@]}; do
@@ -722,7 +725,6 @@ install_apigw_fe () {
     "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m ${target_name} -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#docs#static#runtime#runtime.js"
 
 }
-
 
 install_apigw () {
     local module=apigw
@@ -1042,7 +1044,8 @@ install_saas () {
             if [ "$app_version" == "$app_v" ]; then
                 pkg_name=$(_find_latest_one $app_code)
             else
-                pkg_name=${app_code}_V${app_version}.tar.gz
+                # pkg_name=${app_code}_V${app_version}.tar.gz
+                pkg_name=$( _find_saas $app_code $app_version )
             fi
 
             _install_saas $env $app_code $pkg_name
@@ -1127,6 +1130,7 @@ _install_bkmonitor () {
 install_paas_plugins () {
     local module=paas_plugins
     local python_path=/opt/py27/bin/python
+
     emphasize "sync java11 on host: ${BK_PAAS_IP_COMMA}"
     "${SELF_DIR}"/sync.sh "paas" "${BK_PKG_SRC_PATH}/java11.tgz" "${BK_PKG_SRC_PATH}/"
 
@@ -1334,7 +1338,7 @@ install_lesscode () {
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
-    pcmdrc nginx "_sign_host_as_module consul-template"
+    pcmdrc nginx "_sign_host_as_module consul-template
 
     emphasize "set bk_lesscode as desktop display by default"
     set_console_desktop "bk_lesscode"
@@ -1354,7 +1358,6 @@ install_bkapi () {
     "${CTRL_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/install_bkapi_check.sh -p ${INSTALL_PATH} -s ${BK_PKG_SRC_PATH} -m ${module}"
 
 }
-
 
 module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
