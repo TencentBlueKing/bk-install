@@ -760,6 +760,7 @@ install_apigw () {
 
     emphasize "add or update app_code ${BK_APIGW_APP_CODE}"
     add_or_update_appcode "$BK_APIGW_APP_CODE" "$BK_APIGW_APP_SECRET"
+    add_or_update_appcode bk_apigw_test "$BK_APIGW_TEST_APP_SECRET"
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
