@@ -252,10 +252,10 @@ case $1 in
 
         for m in BK_JOB_MANAGE BK_JOB_EXECUTE BK_JOB_CRONTAB BK_JOB_BACKUP BK_JOB_ANALYSIS; do
             gen_mysql_password "$m" "$mysql_password"
-            gen_rabbitmq_password "$m" "$rabbitmq_password"
             gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
-
         done
+
+        gen_rabbitmq_password BK_JOB_EXECUTE "$rabbitmq_password"
 
         #mongod(新增的)
         if [[ -z "$BK_JOB_LOGSVR_MONGODB_URI" ]]; then
