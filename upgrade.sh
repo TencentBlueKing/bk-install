@@ -149,13 +149,19 @@ case "$MODULE" in
         $PCMD -m lesscode "$CTRL_DIR/bin/release_lesscode.sh -u -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -e $CTRL_DIR/bin/04-final/${MODULE}.env"
         ;;
     apigw|bkapigw)
-        echo "sync $MODULE to remote hosts"
+
+        emphasize "update apigw frontend on host: ${BK_NGINX_IP_COMMA}"
+        PRSYNC_EXTRA_OPTS="--delete" "${SELF_DIR}"/sync.sh nginx "${BK_PKG_SRC_PATH}/bk_apigateway/dashboard-fe/" "${INSTALL_PATH}/bk_apigateway/dashboard-fe/"
+        "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m bk_apigateway -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#docs#static#runtime#runtime.js"
+
+        emphasize "sync $MODULE to remote hosts"
         "$SELF_DIR"/sync.sh "${MODULE#bk}" "$BK_PKG_SRC_PATH/bk_apigateway/" "$BK_PKG_SRC_PATH/bk_apigateway/"
 
         # 导入sql文件
+        emphasize "migrate $MODULE sql"
         "$SELF_DIR"/bin/sql_migrate.sh -n mysql-default "$BK_PKG_SRC_PATH"/bk_apigateway/support-files/sql/*.sql
 
-        echo "update $MODULE on all $MODULE hosts"
+        emphasize "update $MODULE on all $MODULE hosts"
         $PCMD -m "${MODULE#bk}" "$CTRL_DIR/bin/release_apigw.sh -u -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -e $CTRL_DIR/bin/04-final/bkapigw.env"
         ;;
 
