@@ -2,7 +2,7 @@
 # 参考etcd的官方安装教程编写的自动化安装脚本
 # 用法：./install_etcd.sh ip1 ip2 ip3
 # 注意事项：1. 请保证已经下载好etcd和etcdctl二进制，放到了系统的$PATH下
-#           2. 三台ip需要并发执行相同的命令，否则systemctl start etcd时会卡住
+#          2. 三台ip需要并发执行相同的命令，否则systemctl start etcd时会卡住
 
 # 确定所需环境变量
 ETCD_CLIENT_PORT=${ETCD_CLIENT_PORT:-2379}
@@ -21,7 +21,10 @@ if ! [[ $etcd_members_num -eq 1 || $etcd_members_num -eq 3 || $etcd_members_num 
     exit 1
 fi
 
-MY_IP_ADDRESS=$(ip route get "$1" | grep -Po '(?<=src )(\d{1,3}\.){3}\d{1,3}' | head -1) 
+for ip in ${etcd_members[@]}; do
+    MY_IP_ADDRESS=$(ip route get "$ip" | grep -Po '(?<=src )(\d{1,3}\.){3}\d{1,3}' | head -1)
+done
+
 ETCD_LISTEN_IP_ADDRESS=${MY_IP_ADDRESS:-127.0.0.1}
 
 # 计算初始的etcd集群列表字符串，以及本机的ETCD_NAME
@@ -37,7 +40,7 @@ ETCD_INITIAL_CLUSTER=${ETCD_INITIAL_CLUSTER#,}
 
 # 如果获取ETCD_NAME失败，传参或者自动获取本机IP有问题，需要人工干预
 if [[ -z $ETCD_NAME ]]; then
-    echo "获取本机的ETCD_NAME失败，请确认\'ip get route $1\'命令输出的ip在脚本命令行参数中"
+    echo "获取本机的ETCD_NAME失败，请确认\'ip route get $1\'命令输出的ip在脚本命令行参数中"
     exit 2
 fi
 

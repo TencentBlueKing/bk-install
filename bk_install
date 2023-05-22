@@ -339,6 +339,7 @@ case $service in
         echo ""
         ;;
     bkapigw|apigw)
+        _bkc sync etcd
         _bkc install etcd
         _bkc sync apigw
         _bkc install apigw
