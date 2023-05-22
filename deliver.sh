@@ -123,6 +123,11 @@ EOF
         emphasize "sync $BK_PKG_SRC_PATH/bkapi_check/ to module: nginx"
         "${SELF_DIR}"/sync.sh "nginx" "$BK_PKG_SRC_PATH/bkapi_check/" "$BK_PKG_SRC_PATH/bkapi_check/"
         ;;
+    etcd)
+        emphasize "sync etcd binary to module: etcd"
+        ETCD_VERSION=v3.5.4
+        "${SELF_DIR}"/sync.sh "etcd" "$BK_PKG_SRC_PATH/etcd-${ETCD_VERSION}-linux-amd64/" "$BK_PKG_SRC_PATH/etcd-${ETCD_VERSION}-linux-amd64/"
+        ;;
     apigw)
         emphasize "sync $BK_PKG_SRC_PATH/bk_apigateway/ to module: apigw"
         "${SELF_DIR}"/sync.sh "apigw" "$BK_PKG_SRC_PATH/bk_apigateway/" "$BK_PKG_SRC_PATH/bk_apigateway/"

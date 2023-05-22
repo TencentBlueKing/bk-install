@@ -614,18 +614,27 @@ _install_paas_project () {
 
 install_etcd () {
     local module=etcd
+    local etcd_version=v3.5.4
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+
+    emphasize "sync etcd commands to /usr/local/bin/"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "rsync -a ${BK_PKG_SRC_PATH}/etcd-${etcd_version}-linux-amd64/{etcd,etcdctl,etcdutl} /usr/local/bin/"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "rsync -a ${CTRL_DIR}/{cfssl,cfssljson} /usr/local/bin/"
 
     # 生成 etcd 证书
-    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i ${BK_ETCD_IP[@]}"
-    
-    emphasize "register consul ${module} on host: ${BK_ETCD_IP[@]}"
+    emphasize "generate etcd cert"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i \"${BK_ETCD_IP[@]}\""
+
+    emphasize "install ${module} on host: ${BK_ETCD_IP[@]}"
     for ip in "${BK_ETCD_IP[@]}"; do
-        "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[@]}"
+        "${SELF_DIR}"/pcmd.sh -H ${ip} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh \"${BK_ETCD_IP[@]}\""
 
         # 注册 consul
-        reg_consul_svc "$module" "2379" "$ip"
+        emphasize "register consul ${module} on host: ${BK_ETCD_IP[@]}"
+        reg_consul_svc "${_project_consul["${module},default"]}" "${_project_port["${module},default"]}" "$ip"
     done
 }
+
 
 install_apisix () {
     local module=apisix
@@ -663,9 +672,6 @@ install_apigw () {
     # apigw 服务器同步并安装python
     emphasize "sync and install python on host: ${BK_APIGW_IP_COMMA}"
     install_python $module
-
-    # 安装 etcd
-    install_etcd
 
     for project in dashboard bk-esb operator apigateway; do
         emphasize "register consul $project on host: ${ip}"

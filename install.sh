@@ -691,16 +691,26 @@ _install_paas_project () {
 
 install_etcd () {
     local module=etcd
+    local etcd_version=v3.5.4
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+
+    emphasize "sync etcd commands to /usr/local/bin/"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "rsync -a ${BK_PKG_SRC_PATH}/etcd-${etcd_version}-linux-amd64/{etcd,etcdctl,etcdutl} /usr/local/bin/"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "rsync -a ${CTRL_DIR}/{cfssl,cfssljson} /usr/local/bin/"
 
     # 生成 etcd 证书
-    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i ${BK_ETCD_IP[@]}"
-    
-    emphasize "register consul ${module} on host: ${BK_ETCD_IP[@]}"
-    for ip in "${BK_ETCD_IP[@]}"; do
-        "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[@]}"
+    emphasize "generate etcd cert"
+    ${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i "${BK_ETCD_IP[*]}"
+    "${SELF_DIR}"/sync.sh ${module} ${INSTALL_PATH}/cert/etcd ${INSTALL_PATH}/cert/
+    "${SELF_DIR}"/sync.sh ${module} $HOME/.cfssl/ $HOME/
 
-        # 注册 consul
-        reg_consul_svc "$module" "2379" "$ip"
+    emphasize "install ${module} on host: ${BK_ETCD_IP[@]}"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[*]}"
+
+    # 注册 consul
+    for ip in "${BK_ETCD_IP[@]}"; do
+        emphasize "register consul ${module} on host: $ip"
+        reg_consul_svc "${_project_consul["${module},default"]}" "${_project_port["${module},default"]}" "$ip"
     done
 }
 
@@ -722,7 +732,6 @@ install_apigw_fe () {
     "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m ${target_name} -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#docs#static#runtime#runtime.js"
 
 }
-
 
 install_apigw () {
     local module=apigw
