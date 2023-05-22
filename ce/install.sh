@@ -623,18 +623,19 @@ install_etcd () {
 
     # 生成 etcd 证书
     emphasize "generate etcd cert"
-    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i \"${BK_ETCD_IP[@]}\""
+    ${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i "${BK_ETCD_IP[*]}"
+    "${SELF_DIR}"/sync.sh ${module} ${INSTALL_PATH}/cert/etcd ${INSTALL_PATH}/cert/
+    "${SELF_DIR}"/sync.sh ${module} $HOME/.cfssl/ $HOME/
 
     emphasize "install ${module} on host: ${BK_ETCD_IP[@]}"
-    for ip in "${BK_ETCD_IP[@]}"; do
-        "${SELF_DIR}"/pcmd.sh -H ${ip} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh \"${BK_ETCD_IP[@]}\""
+    "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[*]}"
 
-        # 注册 consul
-        emphasize "register consul ${module} on host: ${BK_ETCD_IP[@]}"
+    # 注册 consul
+    for ip in "${BK_ETCD_IP[@]}"; do
+        emphasize "register consul ${module} on host: $ip"
         reg_consul_svc "${_project_consul["${module},default"]}" "${_project_port["${module},default"]}" "$ip"
     done
 }
-
 
 install_apisix () {
     local module=apisix
