@@ -126,7 +126,7 @@ class Config:
     def storage(cls, port_yaml):
         statement = []
         statement.append("declare -A _project_port _project_consul _project_name _projects")
-        storage_list = ['redis', 'mysql', 'pypi', 'yum', "influxdb", "es7", "zk", "rabbitmq", "mongodb", "kafka", "beanstalk", "etcd"]
+        storage_list = ['redis', 'mysql', 'pypi', 'yum', "influxdb", "es7", "zk", "rabbitmq", "mongodb", "kafka", "beanstalk", "etcd", "redis_cluster"]
         port_env = yaml.load(open(port_yaml), Loader=yaml.FullLoader)
         for storage in storage_list:
             projects = list(port_env[storage].keys())

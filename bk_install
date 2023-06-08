@@ -129,6 +129,7 @@ case $service in
     cmdb)
         _bkc install redis
         _bkc install redis_sentinel
+        _bkc install redis_cluster
         _bkc install nginx
         _bkc start redis
         _bkc start redis_sentinel

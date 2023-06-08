@@ -108,34 +108,53 @@ usermgr:
     port: 8009
     consul: usermgr
 
+# GSE V1
+#gse:
+#  gse_api:
+#    port: 59313 
+#    consul: gse-api
+#  gse_task:
+#    port: 48673 
+#    consul: gse-task
+#  gse_btsvr:
+#    port:
+#    consul:
+#  gse_data:
+#    port: 58625
+#    consul: gse-data
+#  gse_dba:
+#    port:
+#    consul:
+#  gse_alarm:
+#    port:
+#    consul:
+#  gse_procmgr:
+#    port: 52030 
+#    consul: gse-procmgr
+#  gse_dataop:
+#    port:
+#    consul:
+#  gse_config:
+#    port: 59702
+#    consul: gse-config
+
+# GSE V2
 gse:
-  gse_api:
-    port: 59313 
-    consul: gse-api
   gse_task:
-    port: 48673 
+    port: 48673
     consul: gse-task
-  gse_btsvr:
-    port:
-    consul:
   gse_data:
-    port: 58625
+    port: 28625
     consul: gse-data
-  gse_dba:
-    port:
-    consul:
-  gse_alarm:
-    port:
-    consul:
-  gse_procmgr:
-    port: 52030 
+  gse_proc:
+    port: 52030
     consul: gse-procmgr
-  gse_dataop:
-    port:
-    consul:
-  gse_config:
-    port: 59702
-    consul: gse-config
+  gse_file:
+    port: 28925
+    consul: gse-file
+  gse_cluster:
+    port: 28668
+    consul: gse-cluster
 
 job:
   job-config:
@@ -205,6 +224,11 @@ redis:
 #    port: 6379
 #    consul: redis-paasplugins
 #    name: redis
+redis_cluster:
+  default:
+    port: 6380
+    consul: redis-cluster
+    name: redis-cluster
 #redis_cluster:
 #  default:
 #    # 默认第一个端口为单节点
@@ -335,3 +359,8 @@ apigw:
   thunderstone:
     port: 6012
     consul:
+
+etcd:
+  default:
+    port: 2379
+    consul: etcd
