@@ -80,6 +80,8 @@ Wants=network-online.target
 
 [Service]
 Type=forking
+User=blueking
+Group=blueking
 PIDFile=$PREFIX/logs/bk_apigateway/$MODULE/logs/nginx.pid
 WorkingDirectory=$PREFIX/bk_apigateway/apigateway/$MODULE
 ExecStart=$PREFIX/bk_apigateway/$MODULE/$MODULE/apisix.sh start
