@@ -295,6 +295,26 @@ _install_redis () {
     pcmdrc redis "_sign_host_as_module redis"
 }
 
+install_redis_cluster () {
+    local project=$1
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+    if [ -z  "${project}" ]; then
+        for redis_ip in "${BK_REDIS_CLUSTER_IP[@]}"; do
+            if grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "CLUSTER" | grep "BK_REDIS_.*_IP_COMMA" >/dev/null; then
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis_cluster.sh -n '${_project_name["redis_cluster,default"]}' -p '${_project_port["redis_cluster,default"]}' -a '${BK_REDIS_CLUSTER_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "register ${_project_consul["redis_cluster,default"]} on host $redis_ip"
+                reg_consul_svc "${_project_consul["redis_cluster,default"]}" "${_project_port["redis_cluster,default"]}" "${redis_ip}"
+            fi
+        done
+    fi
+
+    emphasize "create redis cluster on hosts: ${BK_REDIS_CLUSTER_IP[@]}"
+    "${CTRL_DIR}"/pcmd.sh -H "$BK_REDIS_CLUSTER_IP0" "echo yes | redis-cli -a $BK_REDIS_CLUSTER_ADMIN_PASSWORD --cluster create $(for host in ${BK_REDIS_CLUSTER_IP[@]}; do echo -n $host:${_project_port["redis_cluster,default"]}\ ; done)"
+
+    emphasize "sign host as module"
+    pcmdrc redis "_sign_host_as_module redis_cluster"
+}
+
 install_rabbitmq () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     local module=rabbitmq
@@ -1370,7 +1390,7 @@ module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
 
 case $module in
-    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|nfs|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix)
+    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|nfs|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix|redis_cluster)
         install_"${module}" $@
         ;;
     paas_plugins)

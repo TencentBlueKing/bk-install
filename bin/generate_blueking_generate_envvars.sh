@@ -230,11 +230,14 @@ case $1 in
         if [[ -z "$BK_GSE_MONGODB_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_GSE_MONGODB_PASSWORD" "$(rndpw 12)"
         fi
+#        if [[ -z "$BK_GSE_REDIS_PASSWORD" ]]; then
+#            gen_redis_password "BK_GSE" "${redis_password}"
+#        fi
         if [[ -z "$BK_GSE_REDIS_PASSWORD" ]]; then
-            gen_redis_password "BK_GSE" "${redis_password}"
+            printf "%s=%q\n" BK_GSE_REDIS_PASSWORD $BK_REDIS_CLUSTER_ADMIN_PASSWORD
         fi
-        if [[ -z "$BK_GSE_ZK_AUTH" ]]; then
-            printf "%s=%q\n" "BK_GSE_ZK_AUTH" "zkuser:$(rndpw 12)"
+        if [[ -z "$BK_GSE_ZK_TOKEN" ]]; then
+            printf "%s=%q\n" "BK_GSE_ZK_TOKEN" "zkuser:$(rndpw 12)"
         fi
         ;;
     job) 
@@ -512,6 +515,9 @@ case $1 in
         fi
         if [[ -z "$BK_REDIS_ADMIN_PASSWORD" ]]; then
             printf "%s=%q\n" BK_REDIS_ADMIN_PASSWORD "$(rndpw 12)"
+        fi
+        if [[ -z "$BK_REDIS_CLUSTER_ADMIN_PASSWORD" ]]; then
+            printf "%s=%q\n" BK_REDIS_CLUSTER_ADMIN_PASSWORD "$(rndpw 12)"
         fi
         # elastiscearch7的elastic账户的密码
         if [[ -z "$BK_ES7_ADMIN_PASSWORD" ]]; then
