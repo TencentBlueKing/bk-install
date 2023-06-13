@@ -83,7 +83,7 @@ case "$MODULE" in
 
         # 远程调用install脚本更新
         echo "start upgade $MODULE"
-        $PCMD -m "${MODULE#bk}" "$CTRL_DIR/bin/install_${MODULE}.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH}/ -p ${BK_HOME} -e ${CTRL_DIR}/bin/04-final/$MODULE.env"
+        $PCMD -m "${MODULE#bk}" "$CTRL_DIR/bin/install_bkiam_search_engine.sh -b \$LAN_IP -s ${BK_PKG_SRC_PATH}/ -p ${BK_HOME} -e ${CTRL_DIR}/bin/04-final/$MODULE.env"
 
         # 重启进程
         ${CTRL_DIR}/control.sh restart "$MODULE"

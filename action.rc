@@ -54,6 +54,11 @@ action_redis () {
     fi
 }
 
+action_redis_cluster () {
+    local action=$1
+    systemctl ${action} redis-cluster.service 
+}
+
 action_rabbitmq () {
     local action=$1
     systemctl ${action} rabbitmq-server.service
