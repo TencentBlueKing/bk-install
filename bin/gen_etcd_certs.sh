@@ -72,6 +72,14 @@ if ! [[ -d "${ETCD_CERT_PATH}" ]]; then
    install -dv "${ETCD_CERT_PATH}"
 fi
 
+if ! command -v cfssl &>/dev/null; then
+    error "cfssl: command not found"
+fi
+
+if ! command -v cfssljson &>/dev/null; then
+    error "cfssljson: command not found"
+fi
+
 cat <<EOF > "$HOME"/.cfssl/etcd-ca-csr.json
 {
     "CN": "BCS own CA",
