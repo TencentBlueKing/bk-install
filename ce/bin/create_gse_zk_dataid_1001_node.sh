@@ -6,12 +6,12 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 # 加载环境变量
 . $SELF_DIR/../load_env.sh
 
-gse_zk_addr="$BK_GSE_ZK_ADDR"
+gse_zk_addr="$BK_GSE_ZK_HOST"
 zkbin=/opt/zookeeper/bin/zkCli.sh
 bk_biz_id=2 # 《蓝鲸》业务id，默认为2
 
 if [[ -z "$gse_zk_addr" ]]; then
-    echo "BK_GSE_ZK_ADDR 变量为空，无法自动确认gse的zk地址" >&2
+    echo "BK_GSE_ZK_HOST 变量为空，无法自动确认gse的zk地址" >&2
     exit 1
 fi
 
