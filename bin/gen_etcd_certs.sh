@@ -177,9 +177,12 @@ gen_etcd_cert () {
     ]
 }
 EOF
-        convert_etcd_host="$(sed 's/ /","/g' <<< "${ETCD_IPS[@]}")"
-        jq --arg convert_etcd_host "$convert_etcd_host" ".hosts |= .+ [\"$convert_etcd_host\"]" "$SSL_CONF_DIR/etcd${i}.json" > "$tmpfile"
-        cp -a -f "$tmpfile" "$SSL_CONF_DIR/etcd${i}.json"
+
+        if [[ ${#ETCD_IPS[@]} != 1 ]]; then
+            convert_etcd_host="$(sed 's/ /","/g' <<< "${ETCD_IPS[@]}")"
+            jq --arg convert_etcd_host "$convert_etcd_host" ".hosts |= .+ [\"$convert_etcd_host\"]" "$SSL_CONF_DIR/etcd${i}.json" > "$tmpfile"
+            cp -a -f "$tmpfile" "$SSL_CONF_DIR/etcd${i}.json"
+        fi
 
             # gen etcd cert
             if [[ ! -f ${etcd_ca_cert%/*}/etcd${i}.pem ]]; then
