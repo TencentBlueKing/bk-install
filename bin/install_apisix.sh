@@ -70,7 +70,10 @@ while (( $# > 0 )); do
     shift
 done
 
-# apisix
+# 解决 apisix nginx 编译路径写死的问题
+ln -s "$PREFIX"/bk_apigateway/apisix/openresty /usr/local/openresty
+
+# 生成 apisix systemd 托管文件
 cat > /usr/lib/systemd/system/apisix.service << EOF
 [Unit]
 Description=apisix
@@ -99,4 +102,4 @@ if ! systemctl is-enabled "apisix.service" &>/dev/null; then
     systemctl enable "apisix.service"
 fi
 
-systemctl status "apisix.service"
+systemctl start "apisix.service"
