@@ -22,17 +22,16 @@ ENV_FILE=
 
 BIND_ADDR=
 OUTER_IP=
+BIND_IPV6_ADDR=
 
 declare -A PROJECTS=(
-    [gse-dba]=gse_dba
-    [gse-api]=gse_api
     [gse-task]=gse_task
     [gse-data]=gse_data
-    [gse-procmgr]=gse_procmgr
-    [gse-btsvr]=gse_btsvr
-    [gse-alarm]=gse_alarm
-    [gse-config]=gse_config
+    [gse-proc]=gse_proc
+    [gse-file]=gse_file
+    [gse-cluster]=gse_cluster
 )
+
 
 usage () {
     cat <<EOF
@@ -46,6 +45,7 @@ usage () {
             [ -s, --srcdir      [必填] "从该目录拷贝gse目录到--prefix指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
             [ -l, --log-dir     [可选] "日志目录,默认为$PREFIX/logs/gse" ]
+            [ --ipv6            [可选] "支持 IPv6"]
 
             [ -v, --version     [可选] 查看脚本版本号 ]
 EOF
@@ -107,6 +107,10 @@ while (( $# > 0 )); do
             shift
             LOG_DIR=$1
             ;;
+        --ipv6 )
+            shift
+            BIND_IPV6_ADDR=$1
+            ;;
         --help | -h | '-?' )
             usage_and_exit 0
             ;;
@@ -149,9 +153,15 @@ install -o root -g root -m 755 -d /var/run/gse
 rsync -av --delete --exclude="agent_*" --exclude=proxy "${MODULE_SRC_DIR}"/gse/ "$PREFIX/gse/"
 
 # 渲染配置
-"$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
-    -e "$ENV_FILE" -E LAN_IP="$BIND_ADDR" -E WAN_IP="$OUTER_IP" \
+if [[ -n $BIND_IPV6_ADDR ]];then
+    "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
+    -e "$ENV_FILE" -E LAN_IP="$BIND_ADDR" -E WAN_IP="$OUTER_IP" -E LAN_IPV6="$BIND_IPV6_ADDR"\
     "$MODULE_SRC_DIR"/$MODULE/support-files/templates/#etc#*
+else
+    "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
+    -e "$ENV_FILE" -E LAN_IP="$BIND_ADDR" -E WAN_IP="$OUTER_IP"\
+    "$MODULE_SRC_DIR"/$MODULE/support-files/templates/#etc#*
+fi
 
 # 先生成bk-gse.target
 cat <<EOF > /usr/lib/systemd/system/bk-gse.target
@@ -175,7 +185,7 @@ PartOf=bk-gse.target
 [Service]
 Type=forking
 WorkingDirectory=/var/run/gse
-ExecStart=$PREFIX/gse/server/bin/${binary} -f $PREFIX/etc/gse/${short_m}.conf
+ExecStart=$PREFIX/gse/server/bin/${binary} -f $PREFIX/etc/gse/$binary.conf
 ExecStop=$PREFIX/gse/server/bin/${binary} --quit
 ExecReload=/usr/bin/kill -36 \$MAINPID
 PIDFile=/var/run/gse/run/${short_m}.pid
