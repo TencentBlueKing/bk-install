@@ -89,7 +89,7 @@ declare -A SERVICE=(
     ['auth']=bk-auth
     ['etcd']=etcd
     ['apisix']=apisix
-    ['redis_cluster']=redis-cluster
+    ['redis_cluster']=redis-cluster.*
 )
 
 declare -A BCS_SERVICE=(
