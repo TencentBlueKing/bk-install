@@ -6,6 +6,7 @@ usage () {
     echo "PLATFORM: "
     echo "  ./bk_install paas         安装 paas 及依赖环境"
     echo "  ./bk_install app_mgr      安装 appo,appt 及依赖"
+    echo "  ./bk_install apigw        安装 蓝鲸网关 及依赖"
     echo "  ./bk_install cmdb         安装 cmdb 及依赖环境"
     echo "  ./bk_install job          安装 job 及依赖环境"
     echo "  ./bk_install ci           安装 蓝盾 及依赖环境"
@@ -14,7 +15,6 @@ usage () {
     echo "  ./bk_install bklog        安装 bklog 及依赖环境"
     echo "  ./bk_install paas_plugin  安装 paas_plugins 及依赖环境"
     echo "  ./bk_install lesscode     安装 可视化开发平台"
-    echo "  ./bk_install bkauth       安装 认证服务"
     echo "  ./bk_install iam_search_engine  安装权限中心 iam_search_engine 模块"
     echo "  ./bk_install saas-[o|t] [APP_CODE[==x.x.x]]  从后台部署 saas 应用"
 }
@@ -84,6 +84,11 @@ case $service in
         _bkc install paas
         _bkc start paas
 
+        # 启动前需要先同步 open_paas 数据库旧数据，所以需要在paas后面部署
+        _bkc sync bkauth
+        _bkc install bkauth
+        _bkc start bkauth
+
         _bkc install rabbitmq
         _bkc start rabbitmq
         _bkc sync usermgr
@@ -107,13 +112,6 @@ case $service in
         echo "登陆用户名(login user): $(green_echo "$BK_PAAS_ADMIN_USERNAME")"
         echo "登陆密码(login password): $(green_echo "$BK_PAAS_ADMIN_PASSWORD")"
         echo 
-        ;;
-    bkauth)
-        _bkc install redis
-        _bkc start redis
-        _bkc sync bkauth
-        _bkc install bkauth
-        _bkc start bkauth
         ;;
     cmdb)
         _bkc install redis
@@ -319,9 +317,13 @@ case $service in
         _bkc sync apigw
         _bkc install apigw
         _bkc start apigw
-        _bkc status apigw
         _bkc install apisix
         _bkc start apisix
+        _bkc restart apigw
+        echo "等待 bk-apigateway 所有服务进程启动成功"
+        sleep 5 
+        _bkc status apigw
+        _bkc status apisix
         ;;
     ci) 
         bash ./bk_install_ci
