@@ -72,6 +72,8 @@ else
     TEST_IP="10.0.0.0"
 fi
 LAN_IP=$(ip route get "$TEST_IP" | grep -Po '(?<=src )(\d{1,3}\.){3}\d{1,3}')
+LAN_IPV6=$(ip -6 addr show | awk '/inet6 .* scope global/{ split($2, ip_parts, "/"); print ip_parts[1]}')
+
 if [[ -z "$LAN_IP" ]]; then
     echo "auto get LAN_IP failed, you can check <ip route get $TEST_IP> command output"
     echo "or create /etc/blueking/env/local.env file and input following line in it: "
@@ -82,6 +84,11 @@ fi
 if ! grep -q "LAN_IP=" /etc/blueking/env/local.env 2>/dev/null; then
     echo "LAN_IP=$LAN_IP" >> /etc/blueking/env/local.env
 fi
+
+if ! [[ -z "$LAN_IPV6" ]]; then
+    echo "LAN_IPV6=$LAN_IPV6" >> /etc/blueking/env/local.env
+fi
+
 #if WAN_IP=$(curl -s --connect-timeout 2 http://ip.sb); then
 #    if ! grep -q "WAN_IP=" /etc/blueking/env/local.env 2>/dev/null; then
 #        echo "WAN_IP=$WAN_IP" >> /etc/blueking/env/local.env

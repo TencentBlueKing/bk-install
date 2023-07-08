@@ -266,7 +266,13 @@ case $1 in
             gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
         done
 
-        gen_rabbitmq_password BK_JOB_EXECUTE "$rabbitmq_password"
+        if [[ -z "$BK_JOB_RABBITMQ_PASSWORD" ]]; then
+            gen_rabbitmq_password BK_JOB "$rabbitmq_password"
+        fi
+        
+        if [[ -z "$BK_JOB_EXECUTE_RABBITMQ_PASSWORD" ]]; then
+            gen_rabbitmq_password BK_JOB_EXECUTE "$rabbitmq_password"
+        fi
 
         #mongod(新增的)
         if [[ -z "$BK_JOB_LOGSVR_MONGODB_URI" ]]; then
@@ -284,6 +290,9 @@ case $1 in
         fi
         if [[ -z "$BK_JOB_MANAGE_SERVER_HOST0" ]]; then
             printf "%s=%q\n" "BK_JOB_MANAGE_SERVER_HOST0" "$BK_JOB_IP0"
+        fi
+        if [[ -z "$BK_JOB_CRONTAB_SERVER_HOST0" ]]; then
+            printf "%s=%q\n" "BK_JOB_CRONTAB_SERVER_HOST0" "$BK_JOB_IP0"
         fi
         if [[ -z "$BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"

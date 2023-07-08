@@ -225,8 +225,13 @@ redis:
 #    consul: redis-paasplugins
 #    name: redis
 redis_cluster:
+# default 作为 ee 的默认启动端口，single 作为ce单点部署启动的端口列表
   default:
     port: 6380
+    consul: redis-cluster
+    name: redis-cluster
+  single:
+    port: 6380,6381,6382
     consul: redis-cluster
     name: redis-cluster
 #redis_cluster:
@@ -333,7 +338,7 @@ yum:
     consul: yum
 beanstalk:
   default:
-    port: 11300
+    port: 1130e
     consul: beanstalk
 
 # 6000-6020 为 apigw 预留端口
@@ -359,6 +364,9 @@ apigw:
   thunderstone:
     port: 6012
     consul:
+  apigateway-core-api:
+    port: 6013
+    consul: apigw-core-api
 
 etcd:
   default:

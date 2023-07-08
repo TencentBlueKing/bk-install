@@ -44,7 +44,8 @@ class Message(object):
         "公共组件": "public",
         "节点管理": "nodeman",
         "日志平台": "log",
-        "容器管理平台": "bcs"
+        "容器管理平台": "bcs",
+        "蓝鲸API网关": "apigw"
     }
 
     # 多进程单台服务器部署时无法获取进程列表. 与blueking_topo_module.tpl绑定, 新增进程可能需要更改
@@ -52,7 +53,7 @@ class Message(object):
     real_module_dict = {
         'cmdb' : ["cmdb-admin","cmdb-api","cmdb-auth","cmdb-cloud","cmdb-cache","cmdb-core","cmdb-datacollection",
                                             "cmdb-event","cmdb-host","cmdb-op","cmdb-proc","cmdb-task","cmdb-topo","cmdb-web"], # cmdb 去掉 cmdb-synchronize, 并且 cmdb-operation更名为cmdb-op
-        "gse" : ["gse_api","gse_task","gse_btsvr","gse_data","gse_dba","gse_alarm","gse_proc","gse_config"],
+        "gse" : ["gse_cluster","gse_task","gse_file","gse_data","gse_proc"],
         "job": ["job-config","job-gateway","job-manage","job-execute","job-crontab","job-logsvr","job-backup","job-analysis"],
         "monitor": ["influxdb-proxy","monitor","grafana","transfer","unify-query","ingester"],
         "nodeman": ["nodeman-api"],
@@ -61,7 +62,8 @@ class Message(object):
         "ssm": ['bk-ssm'],
         "paas": ["paas","appengine","esb","login","console","apigw"],
         "es7": ["elasticsearch"],
-        "zk": ["zookeeper"]
+        "zk": ["zookeeper"],
+        "apigw": ["apigw-core-api", "apigw-bk-esb", "apigw-dashboard", "apigw-operator"]
     }
 
 class Action(object):

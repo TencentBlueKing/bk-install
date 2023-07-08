@@ -72,6 +72,14 @@ if ! [[ -d "${ETCD_CERT_PATH}" ]]; then
    install -dv "${ETCD_CERT_PATH}"
 fi
 
+if ! command -v cfssl &>/dev/null; then
+    error "cfssl: command not found"
+fi
+
+if ! command -v cfssljson &>/dev/null; then
+    error "cfssljson: command not found"
+fi
+
 cat <<EOF > "$HOME"/.cfssl/etcd-ca-csr.json
 {
     "CN": "BCS own CA",
@@ -169,9 +177,12 @@ gen_etcd_cert () {
     ]
 }
 EOF
-        convert_etcd_host="$(sed 's/ /","/g' <<< "${ETCD_IPS[@]}")"
-        jq --arg convert_etcd_host "$convert_etcd_host" ".hosts |= .+ [\"$convert_etcd_host\"]" "$SSL_CONF_DIR/etcd${i}.json" > "$tmpfile"
-        cp -a -f "$tmpfile" "$SSL_CONF_DIR/etcd${i}.json"
+
+        if [[ ${#ETCD_IPS[@]} != 1 ]]; then
+            convert_etcd_host="$(sed 's/ /","/g' <<< "${ETCD_IPS[@]}")"
+            jq --arg convert_etcd_host "$convert_etcd_host" ".hosts |= .+ [\"$convert_etcd_host\"]" "$SSL_CONF_DIR/etcd${i}.json" > "$tmpfile"
+            cp -a -f "$tmpfile" "$SSL_CONF_DIR/etcd${i}.json"
+        fi
 
             # gen etcd cert
             if [[ ! -f ${etcd_ca_cert%/*}/etcd${i}.pem ]]; then

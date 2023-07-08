@@ -16,14 +16,11 @@ EXITCODE=0
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
 PROJECTS=(
-    bk-gse-alarm
-    bk-gse-api
-    bk-gse-btsvr
     bk-gse-data
-    bk-gse-dba
-    bk-gse-procmgr
+    bk-gse-file
+    bk-gse-proc
     bk-gse-task
-    bk-gse-config
+    bk-gse-cluster
 )
 MODULE=gse
 GSE_MODULE=all
@@ -258,7 +255,11 @@ fi
 # 渲染配置
 if [[ $UPDATE_CONFIG = 1 ]]; then
     source /etc/blueking/env/local.env 
-    $RENDER_TPL -u -m gse -p "$PREFIX" -E LAN_IP="$LAN_IP" -e "$ENV_FILE" "$PREFIX"/gse/support-files/templates/#etc#gse*
+    if [[ -n $LAN_IPV6 ]];then
+        $RENDER_TPL -u -m gse -p "$PREFIX" -E LAN_IP="$LAN_IP" -E LAN_IPV6="$LAN_IPV6" -e "$ENV_FILE" "$PREFIX"/gse/support-files/templates/#etc#gse*
+    else
+        $RENDER_TPL -u -m gse -p "$PREFIX" -E LAN_IP="$LAN_IP" -E LAN_IPV6="$LAN_IPV6" -e "$ENV_FILE" "$PREFIX"/gse/support-files/templates/#etc#gse*
+    fi
 fi 
 for m in "${UPDATE_MODULE[@]}"; do
     log "reloading $m"

@@ -23,6 +23,7 @@ declare -a UPDATE_MODULE=(
     operator
     apigateway
     bk-esb
+    apigateway-core-api
 )
 
 MODULE=bk_apigateway
@@ -244,7 +245,7 @@ case $APIGW_MODULE in
 
             cd "$PREFIX"/$MODULE/"$APIGW_MODULE"/
             PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-            bash ./on_migrate
+            bash ./bin/on_migrate
         )
 
         if [[ $? -ne 0 ]]; then
@@ -273,7 +274,7 @@ case $APIGW_MODULE in
 
             cd "$PREFIX"/$MODULE/"$APIGW_MODULE"/
             PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-            bash ./on_migrate
+            bash ./bin/on_migrate
         )
 
         if [[ $? -ne 0 ]]; then
