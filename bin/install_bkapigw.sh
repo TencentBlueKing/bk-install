@@ -20,6 +20,7 @@ declare -A PORTS=(
     ["operator"]=6004
     ["apigateway"]=6006
     ["bk-esb"]=6010
+    ["apigateway-core-api"]=6013
 
 )
 declare -a MODULES=(${!PORTS[@]})
@@ -37,6 +38,8 @@ MODULE=bk_apigateway
 
 ENV_FILE=
 BIND_ADDR=127.0.0.1
+
+RPM_DEP=(mysql-devel gcc gcc-devel python-devel)
 
 usage () {
     cat <<EOF
@@ -163,6 +166,11 @@ install -o blueking -g blueking -m 755 -d /etc/blueking/env
 install -o blueking -g blueking -m 755 -d "$PREFIX/$MODULE"
 install -o blueking -g blueking -m 755 -d "$PREFIX/public/$MODULE"
 
+ # 安装rpm依赖包，如果不存在
+if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
+    yum -y install "${RPM_DEP[@]}"
+fi
+
 
 # 拷贝pip pkgs
 rsync -a --delete "${MODULE_SRC_DIR}"/$MODULE/support-files "$PREFIX/$MODULE/"
@@ -177,7 +185,7 @@ rsync -a --delete "${MODULE_SRC_DIR}"/$MODULE/ "$PREFIX/$MODULE/"
     -E LAN_IP="$BIND_ADDR" -e "$ENV_FILE" \
     "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*
 
-chmod 755 -R "$PREFIX"/$MODULE/operator/
+chmod 755 -R "$PREFIX"/$MODULE/operator/ "$PREFIX"/$MODULE/apigateway-core-api/
 
 cat <<EOF > /etc/sysconfig/bk-apigw-"$APIGW_MODULE"
 PORT=${PORTS[$APIGW_MODULE]}
@@ -206,7 +214,7 @@ case $APIGW_MODULE in
 
                 cd $PREFIX/$MODULE/$APIGW_MODULE/
                 PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-                bash ./on_migrate
+                bash ./bin/on_migrate
 
             )
 
@@ -236,7 +244,7 @@ case $APIGW_MODULE in
 
                 cd $PREFIX/$MODULE/$APIGW_MODULE/
                 PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-                bash ./on_migrate
+                bash ./bin/on_migrate
 
             )
 
@@ -300,7 +308,7 @@ export BK_HOME=$PREFIX
 
 wait_ns_alive apigw-dashboard.service.consul || fail "apigw-dashboard.service.consul无法解析"
 
-cd $PREFIX/$MODULE/$APIGW_MODULE/
+cd "$PREFIX"/$MODULE/"$APIGW_MODULE"/
 PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-bash ./post_migrate
+bash ./bin/post_migrate
 
