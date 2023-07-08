@@ -45,7 +45,7 @@ case $MODULE_DIR_NAME in
     
     gse)    # 因为需要多增加WAN_IP的渲染，且templates下的只需要渲染#etc#gse开头的模块
         "$SELF_DIR"/render_tpl -u -m "$MODULE_DIR_NAME" -p "$BK_HOME" \
-            -E LAN_IP="$LAN_IP" -E WAN_IP="$WAN_IP" -e "${SELF_DIR}/04-final/${MODULE_DIR_NAME}.env" \
+            -E LAN_IP="$LAN_IP" -E WAN_IP="$WAN_IP" -E LAN_IPV6="$LAN_IPV6" -e "${SELF_DIR}/04-final/${MODULE_DIR_NAME}.env" \
             "$BK_PKG_SRC_PATH/$MODULE_DIR_NAME"/support-files/templates/#etc#gse#*
         ;;
     cmdb) # 只渲染server/conf下的配置
