@@ -185,7 +185,7 @@ EOF
 )
     wait_ns_alive "${host}".service.consul  || fail "es7 启动失败"
     resp=$(curl -s -u elastic:"${BK_ES7_ADMIN_PASSWORD}" http://"${host}".service.consul:"${rest_port}"/_cluster/health |jq .status) 
-    if [[ $resp == '"green"' ]]; then
+    if [[ $resp != '"red"' ]]; then
         curl -X PUT -w "\n" -s -u elastic:"${BK_ES7_ADMIN_PASSWORD}" "${host}.service.consul:${rest_port}/_cluster/settings" -H 'Content-Type: application/json'  --data "${data}"  
     else
         echo "es7 集群状态异常, msg -> ${resp}"
