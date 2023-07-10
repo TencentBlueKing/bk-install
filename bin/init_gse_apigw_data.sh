@@ -90,7 +90,7 @@ if [[ -z "$GSE_APP_CODE" || -z "$GSE_APP_SECRET" || -z "$BK_GSE_APP_VERSION" || 
 fi
 
 # 启动 bk-gse 初始化数据镜像
-docker run --name=$IMAGES_NAME --net=host \
+docker run --rm --name=$IMAGES_NAME --net=host \
     --env BK_APIGW_NAME="$BK_APIGW_NAME" \
     --env BK_API_URL_TMPL="$BK_API_URL_TMPL/api/{api_name}" \
     --env BK_APP_CODE="$GSE_APP_CODE" \
