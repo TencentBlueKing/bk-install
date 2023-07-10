@@ -1006,7 +1006,12 @@ install_saas () {
 
             _install_saas $env $app_code $pkg_name
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            set_console_desktop ${app_code}
+
+            emphasize "sync open_paas data to bkauth"
+            sync_secret_to_bkauth
+            
+            emphasize "set the $app_code app to display the desktop by default"
+            set_console_desktop "${app_code}"
         done
     else
         all_app=( $(_find_all_saas) )
