@@ -75,7 +75,7 @@ controller_ip	controller_ip
 usermgr	python	usermgr	usermgr-api/bin/gunicorn	0.0.0.0	8009	TCP
 license	license_server	license	license.json	0.0.0.0	8443	TCP
 						
-auth	bkauth	bkauth	bkauth	0.0.0.0	5009	TCP
+auth	bkauth	bkauth	bkauth		5009	TCP
 						
 apigw-core-api	bk-apigateway-core-api	apigw-core-api			6013	TCP
 apigw-bk-esb	python	apigw-bk-esb		0.0.0.0	6010	TCP
