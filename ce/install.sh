@@ -250,7 +250,7 @@ install_redis_cluster () {
     "${CTRL_DIR}"/pcmd.sh -H "$BK_REDIS_CLUSTER_IP0" "source ${CTRL_DIR}/functions; response=\$(redis-cli -a \"$BK_REDIS_CLUSTER_ADMIN_PASSWORD\" -h \"$BK_REDIS_CLUSTER_IP0\" -p \"${PORT_LIST[0]}\" cluster info | grep cluster_state | tr -d '[:space:]'); if [[ "\$response" != "cluster_state:ok" ]]; then err "当前集群状态: \$response"; else ok "当前集群状态: \$response"; fi"
 
     emphasize "sign host as module"
-    pcmdrc redis "_sign_host_as_module redis_cluster"
+    pcmdrc redis_cluster "_sign_host_as_module redis_cluster"
 }
 
 install_rabbitmq () {

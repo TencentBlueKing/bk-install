@@ -23,10 +23,10 @@ job-backup	java	job-backup	job-backup.jar	0.0.0.0	10507	TCP
 job-analysis	java	job-analysis	job-analysis.jar	0.0.0.0	10508	TCP
 						
 gse_data	gse_data	gse_data		0.0.0.0	28625	TCP
-gse_proc	gse_procmgr	gse_procmgr			52030	TCP
-gse_task	gse_task	gse_task			48673	TCP
-gse_cluster	gse_cluster	gse_cluster			28668	TCP
-gse_file	gse_file	gse_file			28925	TCP
+gse_proc	gse_proc	gse_proc		0.0.0.0	52030	TCP
+gse_task	gse_task	gse_task		0.0.0.0	48673	TCP
+gse_cluster	gse_cluster	gse_cluster		0.0.0.0	28668	TCP
+gse_file	gse_file	gse_file		0.0.0.0	28925	TCP
 						
 cmdb-admin	cmdb_adminserver	cmdb_adminserver			9000	TCP
 cmdb-api	cmdb_apiserver	cmdb_apiserver			9001	TCP
@@ -69,7 +69,7 @@ redis	redis-server	redis-server			6379	TCP
 zookeeper	java	zookeeper	/etc/zookeeper		2181	TCP
 consul-template	consul-template	consul-template	/etc/consul-template/conf.d	0.0.0.0		TCP
 redis_sentinel	redis-sentinel	redis-sentinel	sentinel		26379	TCP
-redis_cluster	redis-cluster	redis-cluster			6380	TCP
+redis_cluster	redis-server	redis-cluster			6380	TCP
 						
 controller_ip	controller_ip			0.0.0.0		
 usermgr	python	usermgr	usermgr-api/bin/gunicorn	0.0.0.0	8009	TCP
@@ -77,10 +77,9 @@ license	license_server	license	license.json	0.0.0.0	8443	TCP
 						
 auth	bkauth	bkauth	bkauth	0.0.0.0	5009	TCP
 						
-apigw-core-api	bk-apigateway	apigateway-core-api			6013	TCP
-apigw-bk-esb	python	bk-esb			6010	TCP
-apigw-dashboard	python	dashboard			6000	TCP
-apigw-operator	operator	operator				TCP
+apigw-core-api	bk-apigateway-core-api	apigw-core-api			6013	TCP
+apigw-bk-esb	python	apigw-bk-esb		0.0.0.0	6010	TCP
+apigw-dashboard	python	apigw-dashboard		0.0.0.0	6000	TCP
+apigw-operator	micro-gateway-operator	apigw-operator		0.0.0.0	6004	TCP
 						
 bcs	bcs	bcs		0.0.0.0		TCP
-						

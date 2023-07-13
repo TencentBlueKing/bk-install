@@ -322,7 +322,7 @@ install_redis_cluster () {
 
 
     emphasize "sign host as module"
-    pcmdrc redis "_sign_host_as_module redis_cluster"
+    pcmdrc redis_cluster "_sign_host_as_module redis_cluster"
 }
 
 install_rabbitmq () {
