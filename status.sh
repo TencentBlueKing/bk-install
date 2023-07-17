@@ -54,6 +54,7 @@ declare -a THIRD_PARTY_SVC=(
     elasticsearch
     influxdb
     beanstalkd
+    redis_cluster
 )
 TMP_PTN=$(printf "%s|" "${THIRD_PARTY_SVC[@]}")
 THIRD_PARTY_SVC_PTN="^(${TMP_PTN%|})\.service$"
@@ -88,6 +89,7 @@ declare -A SERVICE=(
     ['auth']=bk-auth
     ['etcd']=etcd
     ['apisix']=apisix
+    ['redis_cluster']=redis-cluster.*
 )
 
 declare -A BCS_SERVICE=(

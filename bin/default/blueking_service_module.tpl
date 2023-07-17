@@ -1,8 +1,8 @@
+服务模板	进程名称	进程别名	进程启动参数	绑定IP	端口	协议
 service_template	bk_func_name	bk_process_name	bk_start_param_regex	bind_ip	port	protocol
 bk-iam	iam	bk-iam	bkiam_config.yaml		5001	TCP
 bkiam-search-engine	iam-search-engine	bkiam-search-engine	bkiam_search_engine_config.yaml		5003	TCP
 bk-ssm	ssm	ssm	bkssm_config.yaml		5000	TCP
-						
 						
 appengine	uwsgi	open_paas-appengine	uwsgi-open_paas-appengine.ini		8000	TCP
 paas	uwsgi	open_paas-paas	uwsgi-open_paas-paas.ini		8001	TCP
@@ -22,15 +22,11 @@ job-manage	java	job-manage	job-manage.jar	0.0.0.0	10505	TCP
 job-backup	java	job-backup	job-backup.jar	0.0.0.0	10507	TCP
 job-analysis	java	job-analysis	job-analysis.jar	0.0.0.0	10508	TCP
 						
-						
-gse_api	gse_api	gse_api			50002	TCP
-gse_alarm	gse_alarm	gse_alarm		0.0.0.0		TCP
-gse_btsvr	gse_btsvr	gse_btsvr		0.0.0.0	58930	TCP
-gse_data	gse_data	gse_data		0.0.0.0	58625	TCP
-gse_dba	gse_dba	gse_dba			58859	TCP
-gse_proc	gse_procmgr	gse_procmgr			52030	TCP
-gse_task	gse_task	gse_task			48669	TCP
-gse_config	gse_config	gse_config			59702	TCP
+gse_data	gse_data	gse_data		0.0.0.0	28625	TCP
+gse_proc	gse_proc	gse_proc		0.0.0.0	52030	TCP
+gse_task	gse_task	gse_task		0.0.0.0	48673	TCP
+gse_cluster	gse_cluster	gse_cluster		0.0.0.0	28668	TCP
+gse_file	gse_file	gse_file		0.0.0.0	28925	TCP
 						
 cmdb-admin	cmdb_adminserver	cmdb_adminserver			9000	TCP
 cmdb-api	cmdb_apiserver	cmdb_apiserver			9001	TCP
@@ -47,7 +43,6 @@ cmdb-task	cmdb_taskserver	cmdb_taskserver			9011	TCP
 cmdb-topo	cmdb_toposerver	cmdb_toposerver			9012	TCP
 cmdb-web	cmdb_webserver	cmdb_webserver			9013	TCP
 cmdb-cache	cmdb_cacheservice	cmdb_cacheservice			9014	TCP
-						
 						
 monitor	python	bk-monitor	gunicorn_config.py		10204	TCP
 transfer	transfer	bk-transfer			10202	TCP
@@ -74,10 +69,17 @@ redis	redis-server	redis-server			6379	TCP
 zookeeper	java	zookeeper	/etc/zookeeper		2181	TCP
 consul-template	consul-template	consul-template	/etc/consul-template/conf.d	0.0.0.0		TCP
 redis_sentinel	redis-sentinel	redis-sentinel	sentinel		26379	TCP
-						
+redis_cluster	redis-server	redis-cluster			6380	TCP
 						
 controller_ip	controller_ip			0.0.0.0		
 usermgr	python	usermgr	usermgr-api/bin/gunicorn	0.0.0.0	8009	TCP
 license	license_server	license	license.json	0.0.0.0	8443	TCP
-bcs	bcs	bcs		0.0.0.0		TCP
 						
+auth	bkauth	bkauth	bkauth		5009	TCP
+						
+apigw-core-api	bk-apigateway-core-api	apigw-core-api			6013	TCP
+apigw-bk-esb	python	apigw-bk-esb		0.0.0.0	6010	TCP
+apigw-dashboard	python	apigw-dashboard		0.0.0.0	6000	TCP
+apigw-operator	micro-gateway-operator	apigw-operator		0.0.0.0	6004	TCP
+						
+bcs	bcs	bcs		0.0.0.0		TCP

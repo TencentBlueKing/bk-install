@@ -1,5 +1,5 @@
 # 单点部署蓝鲸基础版
 [basic]
 10.0.0.1 consul,nginx,mongodb,mysql,zk(config),rabbitmq
-10.0.0.1 paas,usermgr,iam,ssm,cmdb,job,nodeman(nodeman)
-10.0.0.1 license,appo,gse,redis,es7,auth
+10.0.0.1 paas,usermgr,iam,ssm,cmdb,job,nodeman(nodeman),iam_search_engine
+10.0.0.1 license,appo,gse,redis,es7,auth,redis_cluster,etcd,apigw

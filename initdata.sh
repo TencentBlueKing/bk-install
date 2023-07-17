@@ -59,25 +59,37 @@ _initdata_mysql () {
 
 _initdata_nodeman () {
     local ip=$BK_NODEMAN_IP0
+
+    emphasize "clean up official_plugin old version packages"
+    # 清理 GSE 缓存的包
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" " find ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_agent/ ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_proxy/ -type f -name gse_*[ce]e-*.tgz -exec rm -fv {} \;"
+
     emphasize "copy file to nginx"
     "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; runuser -u blueking ./bin/manage.sh copy_file_to_nginx"
-    emphasize "init gse plugins"
+
+    emphasize "copy gse file to nodeman"
+    gse_server_pkg=$(_find_lastet_gse_server)
     gse_agent_pkg=$(_find_latest_gse_agent)
-    emphasize "pack gse client with plugin"
-    bash "${CTRL_DIR}"/bin/pack_gse_client_with_plugin.sh \
-        -f "${BK_PKG_SRC_PATH}/${gse_agent_pkg}" -p "${BK_PKG_SRC_PATH}/gse_plugins" -e "${CTRL_DIR}/bin/04-final/gse.env" -c "${INSTALL_PATH}"/cert 
-    emphasize "sync gse agent to host: nodeman"
-    chown -R blueking.blueking /tmp/gse/
-    rsync -v /tmp/gse/*.tgz "$ip:${INSTALL_PATH}/public/bknodeman/download/"
-    emphasize "sync gse_plugins to host: nodeman"
+    rsync -av "${BK_PKG_SRC_PATH}"/{"$gse_server_pkg","$gse_agent_pkg"} "$ip":"${BK_PKG_SRC_PATH}"/
+
+    # 将 gse_server gse_agent 包放入指定路径
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "cp -a ${BK_PKG_SRC_PATH}/$gse_agent_pkg ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_agent/"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "cp -a ${BK_PKG_SRC_PATH}/$gse_server_pkg ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_proxy/"
+
+    emphasize "start gse agent packaging, please wait for moment"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;source bin/environ.sh;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; python manage.py init_agents -o stable"
+    
+    emphasize "sync gse plugins to host: nodeman"
     chown -R blueking.blueking "${BK_PKG_SRC_PATH}"/gse_plugins/ 
     rsync -v "${BK_PKG_SRC_PATH}"/gse_plugins/*.tgz "$ip":"${INSTALL_PATH}"/bknodeman/nodeman/official_plugin/
+
     emphasize "init official plugins on host: nodeman"
     "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; rm -fv ./official_plugin/pluginscripts-*.tgz; ./bin/manage.sh init_official_plugins"
-    # 同步python包到download目录
-    emphasize "sync py36.tgz to nodeman host"
+
+    emphasize "sync py36.tgz file to host:nodeman"
     rsync -avz "${BK_PKG_SRC_PATH}"/python/py36.tgz "$ip":"${INSTALL_PATH}"/public/bknodeman/download/
-    ${CTRL_DIR}/pcmd.sh -m "nodeman" "chown blueking.blueking -R ${INSTALL_PATH}/public/bknodeman/"
+    "${CTRL_DIR}"/pcmd.sh -m "nodeman" "chown blueking.blueking -R ${INSTALL_PATH}/public/bknodeman/"
+
 }
 
 _initdata_cmdb () {
@@ -173,7 +185,7 @@ EOF
 )
     wait_ns_alive "${host}".service.consul  || fail "es7 启动失败"
     resp=$(curl -s -u elastic:"${BK_ES7_ADMIN_PASSWORD}" http://"${host}".service.consul:"${rest_port}"/_cluster/health |jq .status) 
-    if [[ $resp == '"green"' ]]; then
+    if [[ $resp != '"red"' ]]; then
         curl -X PUT -w "\n" -s -u elastic:"${BK_ES7_ADMIN_PASSWORD}" "${host}.service.consul:${rest_port}/_cluster/settings" -H 'Content-Type: application/json'  --data "${data}"  
     else
         echo "es7 集群状态异常, msg -> ${resp}"

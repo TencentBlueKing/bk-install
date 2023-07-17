@@ -70,7 +70,15 @@ while (( $# > 0 )); do
     shift
 done
 
-# apisix
+# 解决 apisix nginx 编译路径写死的问题
+
+if [[ -d usr/local/openresty ]]; then
+    cp -a "$PREFIX"/bk_apigateway/apisix/openresty/*.so /usr/local/openresty/
+else
+    ln -s "$PREFIX"/bk_apigateway/apisix/openresty /usr/local/openresty
+fi
+
+# 生成 apisix systemd 托管文件
 cat > /usr/lib/systemd/system/apisix.service << EOF
 [Unit]
 Description=apisix
@@ -80,6 +88,8 @@ Wants=network-online.target
 
 [Service]
 Type=forking
+User=blueking
+Group=blueking
 PIDFile=$PREFIX/logs/bk_apigateway/$MODULE/logs/nginx.pid
 WorkingDirectory=$PREFIX/bk_apigateway/apigateway/$MODULE
 ExecStart=$PREFIX/bk_apigateway/$MODULE/$MODULE/apisix.sh start
@@ -97,4 +107,4 @@ if ! systemctl is-enabled "apisix.service" &>/dev/null; then
     systemctl enable "apisix.service"
 fi
 
-systemctl status "apisix.service"
+systemctl start "apisix.service"

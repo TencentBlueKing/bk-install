@@ -48,7 +48,7 @@ while (( $# > 0 )); do
             ;;
         -i | --ip)
             shift
-            ETCD_IPS=$1
+            ETCD_IPS=( $1 )
             ;;
         -*)
             error "不可识别的参数: $1"
@@ -60,13 +60,27 @@ while (( $# > 0 )); do
     shift
 done
 
-if [[ -z $ETCD_IPS ]];then
+if [[ -z ${ETCD_IPS[@]} ]];then
     error "etcd ip 列表不能为空"
 fi
 
-install -dv "$HOME/.cfssl"
+if ! [[ -d "$HOME/.cfssl" ]]; then 
+    install -dv "$HOME/.cfssl"
+fi
 
-cat <<EOF > $HOME/.cfssl/etcd-ca-csr.json
+if ! [[ -d "${ETCD_CERT_PATH}" ]]; then
+   install -dv "${ETCD_CERT_PATH}"
+fi
+
+if ! command -v cfssl &>/dev/null; then
+    error "cfssl: command not found"
+fi
+
+if ! command -v cfssljson &>/dev/null; then
+    error "cfssljson: command not found"
+fi
+
+cat <<EOF > "$HOME"/.cfssl/etcd-ca-csr.json
 {
     "CN": "BCS own CA",
     "key": {
@@ -85,7 +99,7 @@ cat <<EOF > $HOME/.cfssl/etcd-ca-csr.json
 }
 EOF
 
-cat <<EOF > $HOME/.cfssl/etcd-ca-config.json
+cat <<EOF > "$HOME"/.cfssl/etcd-ca-config.json
 {
     "signing": {
         "default": {
@@ -126,6 +140,10 @@ EOF
 gen_etcd_cert () {
     local etcd_ca_cert=$ETCD_CERT_PATH/etcd-ca.pem
     local role=$1 i
+    local tmpfile
+
+    tmpfile=$(mktemp /tmp/add_etcd_host.XXXXXXXXX)
+    trap 'rm -f $tmpfile' EXIT
 
     install -dv "${etcd_ca_cert%/*}"
 
@@ -159,6 +177,13 @@ gen_etcd_cert () {
     ]
 }
 EOF
+
+        if [[ ${#ETCD_IPS[@]} != 1 ]]; then
+            convert_etcd_host="$(sed 's/ /","/g' <<< "${ETCD_IPS[@]}")"
+            jq --arg convert_etcd_host "$convert_etcd_host" ".hosts |= .+ [\"$convert_etcd_host\"]" "$SSL_CONF_DIR/etcd${i}.json" > "$tmpfile"
+            cp -a -f "$tmpfile" "$SSL_CONF_DIR/etcd${i}.json"
+        fi
+
             # gen etcd cert
             if [[ ! -f ${etcd_ca_cert%/*}/etcd${i}.pem ]]; then
                 cfssl gencert -ca="${etcd_ca_cert}" \
@@ -169,6 +194,8 @@ EOF
                     | cfssljson -bare "${etcd_ca_cert%/*}/etcd${i}"
             fi
         done
+
+        
     else
         # gen client flanneld cert
         if [[ ! -f ${etcd_ca_cert%/*}/${role}.pem ]]; then
@@ -199,6 +226,8 @@ EOF
         fi
     fi
 }
+
+
 
 
 gen_etcd_cert etcd

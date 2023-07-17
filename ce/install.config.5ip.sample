@@ -1,8 +1,7 @@
 [basic]
-10.0.0.1 consul,nginx,mongodb,mysql,zk(config),rabbitmq
-10.0.0.2 usermgr,iam,ssm,cmdb,job,nodeman(nodeman)
-10.0.0.3 paas,license,appo,gse,redis,es7
-10.0.0.3 beanstalk,auth
+10.0.0.1 consul,nginx,mongodb,mysql,zk(config),rabbitmq,etcd,iam_search_engine
+10.0.0.2 usermgr,iam,ssm,cmdb,job,nodeman(nodeman),redis_cluster
+10.0.0.3 paas,license,appo,gse,redis,es7,beanstalk,auth,apigw
 
 [bkmonitorv3]
 10.0.0.4 kafka(config),influxdb(bkmonitorv3),monitorv3(influxdb-proxy),monitorv3(monitor),monitorv3(grafana),monitorv3(transfer),monitorv3(ingester)
