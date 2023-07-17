@@ -295,6 +295,36 @@ _install_redis () {
     pcmdrc redis "_sign_host_as_module redis"
 }
 
+install_redis_cluster () {
+    local project=$1
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+    if [ -z  "${project}" ]; then
+        for redis_ip in "${BK_REDIS_CLUSTER_IP[@]}"; do
+            if grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "CLUSTER" | grep "BK_REDIS_.*_IP_COMMA" >/dev/null; then
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis_cluster.sh -n '${_project_name["redis_cluster,default"]}' -p '${_project_port["redis_cluster,default"]}' -a '${BK_REDIS_CLUSTER_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "register ${_project_consul["redis_cluster,default"]} on host $redis_ip"
+                reg_consul_svc "${_project_consul["redis_cluster,default"]}" "${_project_port["redis_cluster,default"]}" "${redis_ip}"
+            fi
+        done
+    fi
+
+    emphasize "wait for the redis cluster node startup to complete"
+    wait_ns_alive redis-cluster.service.consul || fail "redis-cluster.service.consul 无法解析"
+
+    emphasize "create redis cluster on hosts: ${BK_REDIS_CLUSTER_IP[@]}"
+    "${CTRL_DIR}"/pcmd.sh -H "$BK_REDIS_CLUSTER_IP0" "echo yes | redis-cli -a $BK_REDIS_CLUSTER_ADMIN_PASSWORD --cluster create $(for host in ${BK_REDIS_CLUSTER_IP[@]}; do echo -n $host:${_project_port["redis_cluster,default"]}\ ; done)"
+
+    # 或者使用 redis-cli --cluster check 进行集群检查 redis-cli --cluster check -a $BK_REDIS_CLUSTER_ADMIN_PASSWORD $BK_REDIS_CLUSTER_IP0:${PORT_LIST[0] 
+    # 添加集群马上检查时，这时集群还是处于fail，需要等待一会集群状态才会变成ok
+    emphasize "Check the redis cluster status, please wait"
+    sleep 10
+    "${CTRL_DIR}"/pcmd.sh -H "$BK_REDIS_CLUSTER_IP0" "source ${CTRL_DIR}/functions; response=\$(redis-cli -a \"$BK_REDIS_CLUSTER_ADMIN_PASSWORD\" -h \"$BK_REDIS_CLUSTER_IP0\" -p \"${PORT_LIST[0]}\" cluster info | grep cluster_state | tr -d '[:space:]'); if [[ "\$response" != "cluster_state:ok" ]]; then err "当前集群状态: \$response"; else ok "当前集群状态: \$response"; fi"
+
+
+    emphasize "sign host as module"
+    pcmdrc redis_cluster "_sign_host_as_module redis_cluster"
+}
+
 install_rabbitmq () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     local module=rabbitmq
@@ -629,6 +659,9 @@ _install_cmdb_project () {
         fi
     done
 
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
+
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -691,16 +724,26 @@ _install_paas_project () {
 
 install_etcd () {
     local module=etcd
+    local etcd_version=v3.5.4
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+
+    emphasize "sync etcd commands to /usr/local/bin/"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "rsync -a ${BK_PKG_SRC_PATH}/etcd-${etcd_version}-linux-amd64/{etcd,etcdctl,etcdutl} /usr/local/bin/"
+    rsync -a "${CTRL_DIR}"/{cfssl,cfssljson} /usr/local/bin/ && chmod +x /usr/local/bin/{cfssljson,cfssl}
 
     # 生成 etcd 证书
-    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i ${BK_ETCD_IP[@]}"
-    
-    emphasize "register consul ${module} on host: ${BK_ETCD_IP[@]}"
-    for ip in "${BK_ETCD_IP[@]}"; do
-        "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[@]}"
+    emphasize "generate etcd cert"
+    ${CTRL_DIR}/bin/gen_etcd_certs.sh -p "${INSTALL_PATH}"/cert/etcd -i "${BK_ETCD_IP[*]}" ; chown -R blueking.blueking "${INSTALL_PATH}"/cert/etcd
+    "${SELF_DIR}"/sync.sh ${module} "${INSTALL_PATH}"/cert/etcd "${INSTALL_PATH}"/cert/
+    "${SELF_DIR}"/sync.sh ${module} "$HOME"/.cfssl/ "$HOME"/
 
-        # 注册 consul
-        reg_consul_svc "$module" "2379" "$ip"
+    emphasize "install ${module} on host: ${BK_ETCD_IP[@]}"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[*]}"
+
+    # 注册 consul
+    for ip in "${BK_ETCD_IP[@]}"; do
+        emphasize "register consul ${module} on host: $ip"
+        reg_consul_svc "${_project_consul["${module},default"]}" "${_project_port["${module},default"]}" "$ip"
     done
 }
 
@@ -719,10 +762,9 @@ install_apigw_fe () {
 
     emphasize "install apigw frontend on host: ${BK_NGINX_IP_COMMA}"
     PRSYNC_EXTRA_OPTS="--delete" "${SELF_DIR}"/sync.sh nginx "${BK_PKG_SRC_PATH}/${target_name}/dashboard-fe/" "${INSTALL_PATH}/bk_apigateway/dashboard-fe/"
-    "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m ${target_name} -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#docs#static#runtime#runtime.js"
+    "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m ${target_name} -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js"
 
 }
-
 
 install_apigw () {
     local module=apigw
@@ -742,13 +784,13 @@ install_apigw () {
     emphasize "sync and install python on host: ${BK_APIGW_IP_COMMA}"
     install_python $module
 
-    for project in dashboard bk-esb operator apigateway api-support; do
+    for project in dashboard bk-esb operator apigateway apigateway-core-api; do
         emphasize "register consul $project on host: ${ip}"
         reg_consul_svc ${_project_consul["${module},${project}"]} ${_project_port["${module},${project}"]} "${BK_APIGW_IP_COMMA}"
     done
 
     # 安装 apigw
-    for project in dashboard api-support bk-esb; do
+    for project in dashboard bk-esb; do
         project_port=${_project_port["${module},${project}"]}
         project_consul=${_project_consul["${module},${project}"]}
         for ip in "${BK_APIGW_IP_COMMA[@]}"; do 
@@ -760,6 +802,7 @@ install_apigw () {
 
     emphasize "add or update app_code ${BK_APIGW_APP_CODE}"
     add_or_update_appcode "$BK_APIGW_APP_CODE" "$BK_APIGW_APP_SECRET"
+    add_or_update_appcode bk_apigw_test "$BK_APIGW_TEST_APP_SECRET"
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -940,12 +983,10 @@ _install_job_backend () {
     local target_name=$(map_module_name $module)
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     local projects=${_projects[$module]}
-    for m in job_backup job_manage job_crontab job_execute job_analysis;do 
-        # 替换_ 兼容projects.yaml 格式
-        # mongod  joblog用户相关授权已经在install mongodb的时候做过
-        emphasize "grant rabbitmq private for ${module}"
-        grant_rabbitmq_pri ${m} "${BK_JOB_IP_COMMA}"
-    done
+
+    emphasize "grant rabbitmq private for ${module}"
+    grant_rabbitmq_pri ${module} "${BK_JOB_IP_COMMA}"
+
     # esb app_code
     emphasize "add or update appcode: ${BK_JOB_APP_CODE}"
     add_or_update_appcode "$BK_JOB_APP_CODE" "$BK_JOB_APP_SECRET"
@@ -1017,6 +1058,9 @@ install_usermgr () {
     # 注册权限模型
     bkiam_migrate ${module}
 
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
+
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -1058,7 +1102,12 @@ install_saas () {
         for app_code in $(_find_all_saas); do
             _install_saas "$env" "$app_code" $(_find_latest_one "$app_code")
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            set_console_desktop ${app_code}
+
+            emphasize "sync open_paas data to bkauth"
+            sync_secret_to_bkauth
+            
+            emphasize "set the $app_code app to display the desktop by default"
+            set_console_desktop "${app_code}"
         done
     fi
 }
@@ -1121,6 +1170,9 @@ _install_bkmonitor () {
         fi
 
     done
+
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
 
 }
 
@@ -1193,6 +1245,9 @@ install_nodeman () {
         pcmdrc ${module} "_mount_shared_nfs bknodeman"
     fi
 
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
+
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc ${module} "_sign_host_as_module consul-template"
@@ -1206,16 +1261,21 @@ install_gse () {
 _install_gse_project () {
     local module=gse
     local project=$1
+    local gse_version=$(_get_version gse)
     local target_name=$(map_module_name $module)
+
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
+    projects=${_projects[${module}]}
+
     emphasize "add or update appcode: $BK_GSE_APP_CODE"
     add_or_update_appcode "$BK_GSE_APP_CODE" "$BK_GSE_APP_SECRET"
+
     emphasize "grant mongodb privilege for ${module}"
     grant_mongodb_pri ${module} 
-    emphasize "init gse zk nodes on host: $BK_GSE_ZK_ADDR"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_ZK_IP0}" "${CTRL_DIR}/bin/create_gse_zk_base_node.sh $BK_GSE_ZK_ADDR"
+    
+    emphasize "init gse zk nodes on host: $BK_GSE_ZK_HOST"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_ZK_IP0}" "${CTRL_DIR}/bin/create_gse_zk_base_node.sh $BK_GSE_ZK_HOST"
     "${SELF_DIR}"/pcmd.sh -H "${BK_ZK_IP0}" "${CTRL_DIR}/bin/create_gse_zk_dataid_1001_node.sh"
-
 
     # 后续待定分模块部署细节 先全量
     # for project in ${_projects[${module}]};do
@@ -1223,13 +1283,22 @@ _install_gse_project () {
     #     ${SELF_DIR}/pcmd.sh -m ${module} "${CTRL_DIR}/bin/install_gse.sh -e ${CTRL_DIR}/bin/04-final/gse.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}  -b \$LAN_IP"
     # done
     emphasize "install ${module}"
-    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/install_gse.sh -e ${CTRL_DIR}/bin/04-final/gse.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}  -b \$LAN_IP -w \"\$WAN_IP\""
-    for project in gse_task gse_api gse_procmgr gse_data gse_config; do
+    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/install_gse.sh -e ${CTRL_DIR}/bin/04-final/gse.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}  -b \$LAN_IP -w \"\$WAN_IP\" --ipv6 \"\$LAN_IPV6\""
+
+    emphasize "register gse consul on host: ${BK_GSE_IP_COMMA}"
+    for project in ${projects[@]}; do
         reg_consul_svc ${_project_consul["${module},${project}"]} ${_project_port["${module},${project}"]} "${BK_GSE_IP_COMMA}"
     done
 
     # 启动
     "${SELF_DIR}"/pcmd.sh -m ${module} "systemctl start bk-gse.target"
+
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
+
+    emphasize "init apigateway data"
+    "${SELF_DIR}"/pcmd.sh -H "$BK_APPO_IP0" "${CTRL_DIR}/bin/init_gse_apigw_data.sh  -c $BK_GSE_APP_CODE -s $BK_GSE_APP_SECRET -v $gse_version -l http://apigw-apigateway.service.consul:6006"
+
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -1288,6 +1357,10 @@ install_bklog () {
     	    pcmdrc "${ip}" "_sign_host_as_module bk${module}-${project}"
         done
     done
+
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
+
 }
 
 install_dbcheck () {

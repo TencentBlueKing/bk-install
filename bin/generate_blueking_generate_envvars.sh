@@ -230,11 +230,14 @@ case $1 in
         if [[ -z "$BK_GSE_MONGODB_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_GSE_MONGODB_PASSWORD" "$(rndpw 12)"
         fi
+#        if [[ -z "$BK_GSE_REDIS_PASSWORD" ]]; then
+#            gen_redis_password "BK_GSE" "${redis_password}"
+#        fi
         if [[ -z "$BK_GSE_REDIS_PASSWORD" ]]; then
-            gen_redis_password "BK_GSE" "${redis_password}"
+            printf "%s=%q\n" BK_GSE_REDIS_PASSWORD $BK_REDIS_CLUSTER_ADMIN_PASSWORD
         fi
-        if [[ -z "$BK_GSE_ZK_AUTH" ]]; then
-            printf "%s=%q\n" "BK_GSE_ZK_AUTH" "zkuser:$(rndpw 12)"
+        if [[ -z "$BK_GSE_ZK_TOKEN" ]]; then
+            printf "%s=%q\n" "BK_GSE_ZK_TOKEN" "zkuser:$(rndpw 12)"
         fi
         ;;
     job) 
@@ -260,9 +263,16 @@ case $1 in
 
         for m in BK_JOB_MANAGE BK_JOB_EXECUTE BK_JOB_CRONTAB BK_JOB_BACKUP BK_JOB_ANALYSIS; do
             gen_mysql_password "$m" "$mysql_password"
-            gen_rabbitmq_password "$m" "$rabbitmq_password"
             gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
         done
+
+        if [[ -z "$BK_JOB_RABBITMQ_PASSWORD" ]]; then
+            gen_rabbitmq_password BK_JOB "$rabbitmq_password"
+        fi
+        
+        if [[ -z "$BK_JOB_EXECUTE_RABBITMQ_PASSWORD" ]]; then
+            gen_rabbitmq_password BK_JOB_EXECUTE "$rabbitmq_password"
+        fi
 
         #mongod(新增的)
         if [[ -z "$BK_JOB_LOGSVR_MONGODB_URI" ]]; then
@@ -280,6 +290,9 @@ case $1 in
         fi
         if [[ -z "$BK_JOB_MANAGE_SERVER_HOST0" ]]; then
             printf "%s=%q\n" "BK_JOB_MANAGE_SERVER_HOST0" "$BK_JOB_IP0"
+        fi
+        if [[ -z "$BK_JOB_CRONTAB_SERVER_HOST0" ]]; then
+            printf "%s=%q\n" "BK_JOB_CRONTAB_SERVER_HOST0" "$BK_JOB_IP0"
         fi
         if [[ -z "$BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
@@ -511,6 +524,9 @@ case $1 in
         fi
         if [[ -z "$BK_REDIS_ADMIN_PASSWORD" ]]; then
             printf "%s=%q\n" BK_REDIS_ADMIN_PASSWORD "$(rndpw 12)"
+        fi
+        if [[ -z "$BK_REDIS_CLUSTER_ADMIN_PASSWORD" ]]; then
+            printf "%s=%q\n" BK_REDIS_CLUSTER_ADMIN_PASSWORD "$(rndpw 12)"
         fi
         # elastiscearch7的elastic账户的密码
         if [[ -z "$BK_ES7_ADMIN_PASSWORD" ]]; then
