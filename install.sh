@@ -1092,6 +1092,7 @@ install_saas () {
             _install_saas $env $app_code $pkg_name
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
             set_console_desktop ${app_code}
+            assert "Set $app_code application icon to default desktop successfully" "Set saas $app_code failed"
         done
     else
         all_app=( $(_find_all_saas) )
@@ -1108,6 +1109,7 @@ install_saas () {
             
             emphasize "set the $app_code app to display the desktop by default"
             set_console_desktop "${app_code}"
+            assert "Set $app_code application icon to default desktop successfully" "Set saas $app_code failed"
         done
     fi
 }
