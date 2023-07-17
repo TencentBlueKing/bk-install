@@ -72,7 +72,7 @@ done
 
 # 解决 apisix nginx 编译路径写死的问题
 
-if [[ -d usr/local/openresty ]]; then
+if [[ -d "/usr/local/openresty" ]]; then
     cp -a "$PREFIX"/bk_apigateway/apisix/openresty/*.so /usr/local/openresty/
 else
     ln -s "$PREFIX"/bk_apigateway/apisix/openresty /usr/local/openresty

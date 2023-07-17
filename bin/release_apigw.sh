@@ -223,36 +223,7 @@ $RENDER_TPL -u -m "$MODULE" -p "$PREFIX" \
 # 安装虚拟环境和pip包
 for APIGW_MODULE in ${UPDATE_MODULE[@]}; do
 case $APIGW_MODULE in
-    bk-esb)
-        # 安装虚拟环境和依赖包(使用加密解释器)
-        "${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \
-        -n "apigw-${APIGW_MODULE}" \
-        -w "${PREFIX}/.envs" -a "$PREFIX/$MODULE/${APIGW_MODULE}" \
-        -s "${PREFIX}/$MODULE/support-files/pkgs" \
-        -r "${PREFIX}/$MODULE/${APIGW_MODULE}/requirements.txt"
-
-        if [[ "$PYTHON_PATH" = *_e* ]]; then
-            # 拷贝加密解释器 //todo
-            cp -a "${PYTHON_PATH}"_e "$PREFIX/.envs/apigw-${APIGW_MODULE}/bin/python"
-        fi
-
-        # migration
-        (
-            set +u +e
-            export BK_FILE_PATH="$PREFIX"/$MODULE/cert/saas_priv.txt
-            export BKPAAS_ENVIRONMENT="env"
-            export BK_HOME=$PREFIX
-
-            cd "$PREFIX"/$MODULE/"$APIGW_MODULE"/
-            PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-            bash ./bin/on_migrate
-        )
-
-        if [[ $? -ne 0 ]]; then
-            fail "bk_apigw($APIGW_MODULE) migrate failed"
-        fi
-    ;;
-    dashboard)
+    bk-esb|dashboard)
         # 安装虚拟环境和依赖包(使用加密解释器)
         "${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \
         -n "apigw-${APIGW_MODULE}" \
