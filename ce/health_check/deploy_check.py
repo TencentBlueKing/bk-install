@@ -694,7 +694,7 @@ class Action(Storage_Check):
         # usermgr mysql login check
         usermgr_ip = re.split(",", os.environ['BK_USERMGR_IP_COMMA'])
         self.mysql_login_check(
-            module = "iam", 
+            module = "usermgr", 
             mysql_host = usermgr_check_env_dict['BK_USERMGR_MYSQL_HOST'],
             mysql_port = usermgr_check_env_dict['BK_USERMGR_MYSQL_PORT'],
             grant_user = usermgr_check_env_dict['BK_USERMGR_MYSQL_USER'],
