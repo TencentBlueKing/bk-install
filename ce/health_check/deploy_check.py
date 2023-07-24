@@ -1116,6 +1116,23 @@ class Log:
     def error(self, message):
         self.__console('error', message)  
         
+class StepEmphasize:
+    '''
+    description: 强调检查步骤
+    '''
+    def __init__(self, module):
+        self.module = module
+
+    def get_formatted_title(self):
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        formatted_title = f"{current_time} checking 【{self.module}】module related information"
+        return formatted_title
+
+    def print_step_title(self):
+        formatted_title = self.get_formatted_title()
+        colored_title = f"\033[44m {formatted_title}\033[0m"
+        print(colored_title)
+
 if __name__ == "__main__":
     p =  argparse.ArgumentParser()
     p.add_argument('-d', action='store', dest='env_dir', help='final directory')
@@ -1141,4 +1158,6 @@ if __name__ == "__main__":
 
     # 根据函数名称执行校验
     for m in re.split(',', args.module):
+        step=StepEmphasize(m)
+        step.print_step_title()
         getattr(action, m)()
