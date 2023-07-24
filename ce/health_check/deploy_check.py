@@ -198,9 +198,9 @@ class Storage_Check(object):
             cluster_state = cluster_info.get('cluster_state')
 
             if cluster_state == 'ok':
-                logg.info("module -> [{}] redis cluster state is healthy!".format(module))
+                logg.info("module -> [{}] {}:{} redis cluster state is {}!".format(module, redis_cluster_host, redis_cluster_port, cluster_state))
             else:
-                logg.error("module -> [{}] redis cluster state is not healthy! msg-> [{}]".format(module, cluster_state))
+                logg.error("module -> [{}] {}:{} redis cluster state is not ok! msg-> [{}]".format(module, redis_cluster_host, redis_cluster_port, cluster_state))
 
         except redis.exceptions.ClusterError as e:
             logg.error("module -> [{}] Error connecting to Redis Cluster:", str(e))
