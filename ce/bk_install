@@ -36,7 +36,7 @@ _bkc () {
     else
         ./bkcli $@ && echo "$*" >>$step_file
 
-        [ $? -eq 0 -o $? -eq 10 ] || exit 1
+       [ $? -eq 0 ] || exit 1 
     fi
 }
 
