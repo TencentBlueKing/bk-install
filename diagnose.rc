@@ -97,7 +97,7 @@ check_gse_data_log () {
 get_snapshot_topic_name () {
     local zkcli=$BK_PKG_SRC_PATH/gse/server/bin/zkcli
     echo "gse dataserver config" >&2
-    local data_config=$($zkcli -server "${BK_GSE_ZK_ADDR}" get /gse/config/etc/dataserver/data/1001 2>&1 | grep data_set | python -m json.tool)
+    local data_config=$($zkcli -server "${BK_GSE_ZK_HOST}" get /gse/config/etc/dataserver/data/1001 2>&1 | grep data_set | python -m json.tool)
     echo "$data_config" >&2
 
     local data_set=$(awk '/data_set/ { print $NF }' <<<"$data_config")

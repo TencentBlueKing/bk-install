@@ -15,18 +15,10 @@ EXITCODE=0
 
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-PROJECTS=(
-    bk-job-config
-    bk-job-crontab
-    bk-job-execute
-    bk-job-gateway
-    bk-job-logsvr
-    bk-job-manage
-    bk-job-backup
-    bk-job-analysis
-    bk-job-file-gateway
-    bk-job-ticket
-)
+
+# job 的模块
+PROJECTS=()
+
 MODULE=job
 JOB_MODULE=all
 # 模块安装后所在的上一级目录
@@ -50,17 +42,21 @@ RELEASE_TYPE=
 # 需要更新的模块列表
 UPDATE_MODULE=()
 
+# 运行模式
+RUN_MODE=stable
+
 usage () {
     cat <<EOF
 用法: 
     $PROGRAM [ -h --help -?  查看帮助 ]
     通用参数：
             [ -p, --prefix          [可选] "安装的目标路径，默认为${PREFIX}" ]
-            [ -m, --module          [可选] "安装的子模块(${PROJECTS[*]}), 逗号分隔。ALL表示默认都会更新" ]
+            [ -m, --module          [可选] "安装的子模块, 逗号分隔。ALL表示默认都会更新" ]
             [ -r, --render-file     [可选] "渲染蓝鲸配置的脚本路径。默认是$RENDER_TPL" ]
             [ -e, --env-file        [可选] "渲染配置文件时，使用该配置文件中定义的变量值来渲染" ]
             [ -u, --update-config   [可选] "是否更新配置文件，默认不更新。" ]
             [ -B, --backup-dir      [可选] "备份程序的目录，默认是$BACKUP_DIR" ]
+            [ --run-mode            [可选] "选择作业平台的模式：lite & stable 默认为：$RUN_MODE"]
             [ -v, --version         [可选] "脚本版本号" ]
 
     更新模式有两种:
@@ -135,6 +131,10 @@ while (( $# > 0 )); do
         -s | --srcdir )
             shift
             MODULE_SRC_DIR=$1
+            ;;
+        --run-mode)
+            shift
+            RUN_MODE=$1
             ;;
         --help | -h | '-?' )
             usage_and_exit 0
@@ -258,23 +258,25 @@ fi
 
 chown blueking.blueking -R "$PREFIX"/job "$PREFIX"/etc/job
 
-# 更新 bk-job-config 如果本机有启用
-if is_string_in_array "bk-job-config" "${UPDATE_MODULE[@]}"; then
-    log "restarting bk-job-config first"
-    systemctl restart bk-job-config
-fi
+if [[ $RUN_MODE == "stable" ]]; then
+    # 更新 bk-job-config 如果本机有启用
+    if is_string_in_array "bk-job-config" "${UPDATE_MODULE[@]}"; then
+        log "restarting bk-job-config first"
+        systemctl restart bk-job-config
+    fi
 
-# 需要验证job-config是否healthy
-counter=30
-log "waiting for job-config healthy"
-until getent hosts job-config.service.consul &>/dev/null || [[ $counter -eq 0 ]]; do
-    sleep 1
-    ((counter--))
-done
-[[ $counter -eq 0 ]] && { log "job-config启动失败，15s内未注册成功, 中止。"; exit 1;}
+    # 需要验证job-config是否healthy
+    counter=30
+    log "waiting for job-config healthy"
+    until getent hosts job-config.service.consul &>/dev/null || [[ $counter -eq 0 ]]; do
+        sleep 1
+        ((counter--))
+    done
+    [[ $counter -eq 0 ]] && { log "job-config启动失败，15s内未注册成功, 中止。"; exit 1;}
 
-if ! curl -s http://job-config.service.consul:10500/actuator/health | grep -q UP &>/dev/null; then
-    log "job-config状态不健康，中止操作。"
+    if ! curl -s http://job-config.service.consul:10500/actuator/health | grep -q UP &>/dev/null; then
+        log "job-config状态不健康，中止操作。"
+    fi
 fi
 
 for m in "${UPDATE_MODULE[@]}"; do

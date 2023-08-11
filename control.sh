@@ -159,13 +159,15 @@ case ${module} in
         if [[ ${action} = "start" || ${action} = "restart" ]]; then
             if [ -z "${project}" ]; then
                 set -e
-                emphasize "$action ${module}-config on host: ${BK_JOB_IP_COMMA}"
-                "${SELF_DIR}"/pcmd.sh -H "${BK_JOB_IP_COMMA}" "systemctl $action bk-job-config"
+                if [[ $BK_JOB_RUN_MODE == "stable" ]]; then
+                    emphasize "$action ${module}-config on host: ${BK_JOB_IP_COMMA}"
+                    "${SELF_DIR}"/pcmd.sh -H "${BK_JOB_IP_COMMA}" "systemctl $action bk-job-config"
+                fi
                 emphasize "$action bk-${module}.target on host: ${BK_JOB_IP_COMMA}"
                 cost_time_attention
                 "${SELF_DIR}"/pcmd.sh -H "${BK_JOB_IP_COMMA}" "systemctl $action bk-job.target"
                 emphasize "${module} health check"
-                wait_return_code "${module}" 120 || err "job 健康检查失败 请重新启动"
+                "${SELF_DIR}"/pcmd.sh -m "${module}" "$CTRL_DIR/health_check/check_job.sh -p ${INSTALL_PATH} --run-mode $BK_JOB_RUN_MODE"
                 set +e
             else
                 emphasize "${action} ${module} ${project} on host: ${target}"

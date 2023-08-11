@@ -186,6 +186,10 @@ _find_latest_gse_agent () {
     )
 }
 
+_find_lastet_gse_server () {
+    cd "$BK_PKG_SRC_PATH"
+    ls -rt gse_[ce]e-*.tgz 2>/dev/null | tail -1
+}
 
 pcmdrc () {
     local target=$1
@@ -245,7 +249,7 @@ wait_return_code () {
     local timeout=${2:-20}
 
     case $project in 
-        cmdb|job|gse|paas|bkiam)
+        cmdb|gse|paas|bkiam)
             check_scripts=check_${project}.sh
             ;;
         *)
@@ -253,8 +257,8 @@ wait_return_code () {
             ;;
     esac
 
-    for i in $(seq $timeout); do
-        ${CTRL_DIR}/health_check/${check_scripts}  && return 0
+    for i in $(seq "$timeout"); do
+        "${CTRL_DIR}"/health_check/"${check_scripts}"  && return 0
         sleep 1
     done
     return 1
@@ -466,8 +470,11 @@ set_console_desktop () {
             err "Failed to set up desktop app: $app_code "
         fi
         # 默认将所有部署的应用展示在admin的桌面
-        ${CTRL_DIR}/pcmd.sh -H $BK_PAAS_IP0 "workon open_paas-console; export BK_ENV=\"production\"; export BK_FILE_PATH=\"$INSTALL_PATH/open_paas/cert/saas_priv.txt\";python manage.py add_app_to_desktop --app_code=\"$app_code\" --username=\"$user\"" &>/dev/null
+        "${CTRL_DIR}"/pcmd.sh -H "$BK_PAAS_IP0" "workon open_paas-console; export BK_ENV=\"production\"; export BK_FILE_PATH=\"$INSTALL_PATH/open_paas/cert/saas_priv.txt\";python manage.py add_app_to_desktop --app_code=\"$app_code\" --username=\"$user\"" &>/dev/null
     fi
    
 }
 
+sync_secret_to_bkauth ()  {
+    "${CTRL_DIR}"/pcmd.sh -H "$BK_AUTH_IP0" "$INSTALL_PATH/bkauth/bin/bkauth sync -c $INSTALL_PATH/etc/bkauth_config.yaml"
+}

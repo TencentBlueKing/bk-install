@@ -54,6 +54,7 @@ declare -a THIRD_PARTY_SVC=(
     elasticsearch
     influxdb
     beanstalkd
+    redis_cluster
 )
 TMP_PTN=$(printf "%s|" "${THIRD_PARTY_SVC[@]}")
 THIRD_PARTY_SVC_PTN="^(${TMP_PTN%|})\.service$"
@@ -88,6 +89,7 @@ declare -A SERVICE=(
     ['auth']=bk-auth
     ['etcd']=etcd
     ['apisix']=apisix
+    ['redis_cluster']=redis-cluster.*
 )
 
 declare -A BCS_SERVICE=(
@@ -103,7 +105,7 @@ declare -A BCS_SERVICE=(
 )
 
 case $module in 
-    paas|cmdb|gse|job)
+    paas|cmdb|gse)
         module=${module#bk}
         target_name=$(map_module_name "${module}")
         source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
@@ -118,6 +120,11 @@ case $module in
             fi
         fi
         ;;
+    job)
+        module=${module#bk}
+        target_name=$(map_module_name "${module}")
+        pcmdrc "${target}" "get_service_status bk-${module}.* "
+    ;;
     monitorv3|bkmonitorv3|log|bklog)
         module=${module#bk*}
         target_name=$(map_module_name "$module")

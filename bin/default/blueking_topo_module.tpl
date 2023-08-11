@@ -30,14 +30,11 @@ monitor	grafana
 monitor	unify-query
 monitor	ingester
 	
-gse	gse_api
-gse	gse_alarm
-gse	gse_btsvr
+gse	gse_cluster
+gse	gse_file
 gse	gse_data
-gse	gse_dba
 gse	gse_proc
 gse	gse_task
-gse	gse_config
 gse	license
 	
 public	consul
@@ -54,6 +51,7 @@ public 	openresty
 public 	consul-template
 public 	redis_sentinel
 public 	beanstalk
+public 	redis_cluster
 	
 nodeman	nodeman-api
 	
@@ -75,6 +73,12 @@ user	bk-iam
 user	bk-ssm
 user	usermgr
 user	bkiam-search-engine
+user	auth
+	
+apigw	apigw-core-api
+apigw	apigw-bk-esb
+apigw	apigw-dashboard
+apigw	apigw-operator
 	
 bcs	bcs
 	

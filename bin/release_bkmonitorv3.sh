@@ -49,6 +49,9 @@ UPDATE_CONFIG=
 RELEASE_TYPE=
 # PYTHON目录(默认用加密的解释器)
 PYTHON_PATH=/opt/py36_e/bin/python3.6
+# 运行的模式
+RUN_MODE=stable
+
 
 usage () {
     cat <<EOF
@@ -59,6 +62,7 @@ usage () {
             [ -m, --module          [可选] "安装的子模块(${!PROJECTS_DIR[@]}), 逗号分隔。all表示默认都会更新" ]
             [ -r, --render-file     [可选] "渲染蓝鲸配置的脚本路径。默认是$RENDER_TPL" ]
             [ -e, --env-file        [可选] "渲染配置文件时，使用该配置文件中定义的变量值来渲染" ]
+            [ -M, --mode        [可选] "选择监控部署的模式：lite & stable, 默认为 $RUN_MODE" ]
             [ -u, --update-config   [可选] "是否更新配置文件，默认不更新。" ]
             [ -B, --backup-dir      [可选] "备份程序的目录，默认是$BACKUP_DIR" ]
             [ -v, --version         [可选] "脚本版本号" ]
@@ -141,6 +145,10 @@ while (( $# > 0 )); do
         -P | --python-path )
             shift
             PYTHON_PATH=$1
+            ;;
+        -M | --mode )
+            shift
+            RUN_MODE=$1
             ;;
         --help | -h | '-?' )
             usage_and_exit 0
@@ -276,6 +284,11 @@ else
         rsync -av "$PREFIX"/etc/bkmonitorv3/ "$PREFIX"/bkmonitorv3/
     fi
 fi
+
+# 更新 Supervisor 配置文件
+log "generate $RUN_MODE supervisor configuration file"
+bash "${PREFIX}"/bkmonitorv3/monitor/bin/release.sh "$RUN_MODE"
+
 chown blueking.blueking -R "${PREFIX}"/bkmonitorv3/
 for m in "${UPDATE_MODULE[@]}"; do
     if [[ $m = "bk-monitor" ]]; then

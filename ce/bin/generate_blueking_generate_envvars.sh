@@ -223,10 +223,10 @@ case $1 in
             printf "%s=%q\n" "BK_GSE_MONGODB_PASSWORD" "$(rndpw 12)"
         fi
         if [[ -z "$BK_GSE_REDIS_PASSWORD" ]]; then
-            gen_redis_password "BK_GSE" "${redis_pwd}"
+            printf "%s=%q\n" BK_GSE_REDIS_PASSWORD $BK_REDIS_CLUSTER_ADMIN_PASSWORD
         fi
-        if [[ -z "$BK_GSE_ZK_AUTH" ]]; then
-            printf "%s=%q\n" "BK_GSE_ZK_AUTH" "zkuser:$(rndpw 12)"
+        if [[ -z "$BK_GSE_ZK_TOKEN" ]]; then
+            printf "%s=%q\n" "BK_GSE_ZK_TOKEN" "zkuser:$(rndpw 12)"
         fi
         ;;
     job) 
@@ -249,18 +249,33 @@ case $1 in
         # 存储依赖的密码,主要是为了让JOB各个模块的密码保持一致。
         mysql_password=$(rndpw 12)
         rabbitmq_password=$(rndpw 12)
+        mongod_password=$(rndpw 8)
 
-        for m in BK_JOB_MANAGE BK_JOB_EXECUTE BK_JOB_CRONTAB BK_JOB_BACKUP BK_JOB_ANALYSIS; do
-            gen_mysql_password "$m" "$mysql_password"
-            gen_rabbitmq_password "$m" "$rabbitmq_password"
-            gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
-
+        for m in BK_JOB BK_JOB_MANAGE BK_JOB_EXECUTE BK_JOB_CRONTAB BK_JOB_BACKUP BK_JOB_ANALYSIS; do
+            job_mysql_name="${m}_MYSQL_PASSWORD"
+            job_redis_name="${m}_REDIS_PASSWORD"
+            if [[ -z "${!job_mysql_name}" ]]; then
+                gen_mysql_password "$m" "$mysql_password"
+            fi
+            if [[ -z "${!job_redis_name}" ]]; then
+                 gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
+            fi
         done
 
-        #mongod(新增的)
-        if [[ -z "$BK_JOB_LOGSVR_MONGODB_URI" ]]; then
-            printf "%s=%s\n" "BK_JOB_LOGSVR_MONGODB_URI" "mongodb://joblog:$(rndpw 8 )@mongodb.service.consul:27017/joblog?replicaSet=rs0"
-        fi
+        for m in BK_JOB BK_JOB_EXECUTE; do
+            job_rabbitmq_name="${m}_RABBITMQ_PASSWORD"
+            if [[ -z "${!job_rabbitmq_name}" ]]; then
+                gen_rabbitmq_password "$m" "$rabbitmq_password"
+            fi
+        done
+
+        for m in BK_JOB BK_JOB_LOGSVR; do
+            job_mongo_name="${m}_MONGODB_URI"
+            if [[ -z "${!job_mongo_name}" ]]; then
+                printf "%s=%q\n" "$job_mongo_name" "mongodb://joblog:$mongod_password@mongodb.service.consul:27017/joblog?replicaSet=rs0"
+            fi
+        done
+
         # actuator密码（获取metrics等信息）
         if [[ -z "$BK_JOB_ACTUATOR_PASSWORD" ]]; then
             printf "%s=%s\n" BK_JOB_ACTUATOR_PASSWORD "$(rndpw 12)"
@@ -272,6 +287,9 @@ case $1 in
         fi
         if [[ -z "$BK_JOB_MANAGE_SERVER_HOST0" ]]; then
             printf "%s=%q\n" "BK_JOB_MANAGE_SERVER_HOST0" "$BK_JOB_IP0"
+        fi
+        if [[ -z "$BK_JOB_CRONTAB_SERVER_HOST0" ]]; then
+            printf "%s=%q\n" "BK_JOB_CRONTAB_SERVER_HOST0" "$BK_JOB_IP0"
         fi
         ;;
     bkssm)
@@ -486,6 +504,9 @@ case $1 in
         fi
         if [[ -z "$BK_REDIS_ADMIN_PASSWORD" ]]; then
             printf "%s=%q\n" BK_REDIS_ADMIN_PASSWORD "$(rndpw 12)"
+        fi
+        if [[ -z "$BK_REDIS_CLUSTER_ADMIN_PASSWORD" ]]; then
+            printf "%s=%q\n" BK_REDIS_CLUSTER_ADMIN_PASSWORD "$(rndpw 12)"
         fi
         # elastiscearch7的elastic账户的密码
         if [[ -z "$BK_ES7_ADMIN_PASSWORD" ]]; then

@@ -25,6 +25,17 @@ get_lan_ip  () {
    fi
 }
 
+get_lan_ipv6 () {
+    if  grep -w LAN_IPV6 /etc/blueking/env/local.env > /dev/null 2>&1;then
+        awk -F '=' '/LAN_IPV6/{print $2}' /etc/blueking/env/local.env
+    else
+        ip -6 addr show | \
+            awk '/inet6 .* scope global/{
+                split($2, ip_parts, "/"); print ip_parts[1]}'
+        return $?
+    fi
+}
+
 get_lan_iface () {
    ip route | grep -wE $LAN_IP | awk -F '[ \t*]' '{print $3;exit}'
 }
@@ -40,6 +51,9 @@ _yum () {
 CURR_PID=$$
 HASTTY=
 LAN_IP=$(get_lan_ip | head -1)
+# 先定义 IPv6 变量，后面定义函数来判断打印消息的IP展示方式，现在默认还是 LAN_IP
+LAN_IPV6=$(get_lan_ipv6)
+
 if [ -z "$HASTTY" ]; then
     HASTTY=$(ps -ef | awk -v P=$CURR_PID '$2==P { if ( $6 == "?") {print 0} else {print 1}}')
 fi
