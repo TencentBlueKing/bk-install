@@ -249,7 +249,7 @@ wait_return_code () {
     local timeout=${2:-20}
 
     case $project in 
-        cmdb|job|gse|paas|bkiam)
+        cmdb|gse|paas|bkiam)
             check_scripts=check_${project}.sh
             ;;
         *)
@@ -257,8 +257,8 @@ wait_return_code () {
             ;;
     esac
 
-    for i in $(seq $timeout); do
-        ${CTRL_DIR}/health_check/${check_scripts}  && return 0
+    for i in $(seq "$timeout"); do
+        "${CTRL_DIR}"/health_check/"${check_scripts}"  && return 0
         sleep 1
     done
     return 1

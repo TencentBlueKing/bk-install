@@ -1,20 +1,99 @@
 #!/usr/bin/env bash
 
-JOB_MODULE=(
-    job-backup
-    job-config
-    job-crontab
-    job-execute
-    job-gateway-management
-    job-logsvr
-    job-manage
-    job-analysis
-)
+# 通用脚本框架变量
+PROGRAM=$(basename "$0")
 
+# job 部署的模块
+JOB_MODULE=()
+
+# 排除的模块
 EXCLUDE_JOB_MODULE=(
     job-direct
     job-gateway
 )
+
+# 模块安装后所在的上一级目录
+PREFIX=/data/bkee
+
+MODULE=job
+
+# JOB 运行的模式
+RUN_MODE=stable
+
+usage () {
+    cat <<EOF
+用法:
+    $PROGRAM [ -h --help -?  查看帮助 ]
+            [ -p, --prefix      [可选] "安装的目标路径，默认为 $PREFIX" ]
+            [ --run-mode        [可选] "选择作业平台的模式：lite & stable 默认为：$RUN_MODE"]
+EOF
+}
+
+usage_and_exit () {
+    usage
+    exit "$1"
+}
+
+log () {
+    echo "$@"
+}
+
+error () {
+    echo "$@" 1>&2
+    usage_and_exit 1
+}
+
+fail () {
+    echo "$@" 1>&2
+    exit 1
+}
+
+warning () {
+    echo "$@" 1>&2
+    EXITCODE=$((EXITCODE + 1))
+}
+
+# 解析命令行参数，长短混合模式
+(( $# == 0 )) && usage_and_exit 1
+while (( $# > 0 )); do
+    case "$1" in
+        -p | --prefix )
+            shift
+            PREFIX=$1
+            ;;
+        --run-mode)
+            shift
+            RUN_MODE=$1
+            ;;
+        --help | -h | '-?' )
+            usage_and_exit 0
+            ;;
+        -*)
+            error "不可识别的参数: $1"
+            ;;
+        *)
+            break
+            ;;
+    esac
+    shift
+done
+
+# 获取安装的子模块
+if [[ $RUN_MODE == "lite" ]]; then
+    while IFS= read -r module; do
+        if [[ $module == "job-gateway" ]]; then
+            module="job-gateway-management"
+        fi
+        JOB_MODULE+=("$module")
+    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy_assemble.yml")
+elif [[ $RUN_MODE == "stable" ]]; then
+    while IFS= read -r module; do
+        if [[ $module == "job-gateway" ]]; then
+            module="job-gateway-management"
+        fi
+        JOB_MODULE+=("$module")
+    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy.yml")
+fi
 
 TRUE="\e[1;32mtrue\e[0m"
 FALSE="\e[1;31mfalse\e[0m"

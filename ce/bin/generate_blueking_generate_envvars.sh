@@ -249,24 +249,33 @@ case $1 in
         # 存储依赖的密码,主要是为了让JOB各个模块的密码保持一致。
         mysql_password=$(rndpw 12)
         rabbitmq_password=$(rndpw 12)
+        mongod_password=$(rndpw 8)
 
-        for m in BK_JOB_MANAGE BK_JOB_EXECUTE BK_JOB_CRONTAB BK_JOB_BACKUP BK_JOB_ANALYSIS; do
-            gen_mysql_password "$m" "$mysql_password"
-            gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
+        for m in BK_JOB BK_JOB_MANAGE BK_JOB_EXECUTE BK_JOB_CRONTAB BK_JOB_BACKUP BK_JOB_ANALYSIS; do
+            job_mysql_name="${m}_MYSQL_PASSWORD"
+            job_redis_name="${m}_REDIS_PASSWORD"
+            if [[ -z "${!job_mysql_name}" ]]; then
+                gen_mysql_password "$m" "$mysql_password"
+            fi
+            if [[ -z "${!job_redis_name}" ]]; then
+                 gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
+            fi
         done
 
-        if [[ -z "$BK_JOB_RABBITMQ_PASSWORD" ]]; then
-            gen_rabbitmq_password BK_JOB "$rabbitmq_password"
-        fi
-        
-        if [[ -z "$BK_JOB_EXECUTE_RABBITMQ_PASSWORD" ]]; then
-            gen_rabbitmq_password BK_JOB_EXECUTE "$rabbitmq_password"
-        fi
+        for m in BK_JOB BK_JOB_EXECUTE; do
+            job_rabbitmq_name="${m}_RABBITMQ_PASSWORD"
+            if [[ -z "${!job_rabbitmq_name}" ]]; then
+                gen_rabbitmq_password "$m" "$rabbitmq_password"
+            fi
+        done
 
-        #mongod(新增的)
-        if [[ -z "$BK_JOB_LOGSVR_MONGODB_URI" ]]; then
-            printf "%s=%s\n" "BK_JOB_LOGSVR_MONGODB_URI" "mongodb://joblog:$(rndpw 8 )@mongodb.service.consul:27017/joblog?replicaSet=rs0"
-        fi
+        for m in BK_JOB BK_JOB_LOGSVR; do
+            job_mongo_name="${m}_MONGODB_URI"
+            if [[ -z "${!job_mongo_name}" ]]; then
+                printf "%s=%q\n" "$job_mongo_name" "mongodb://joblog:$mongod_password@mongodb.service.consul:27017/joblog?replicaSet=rs0"
+            fi
+        done
+
         # actuator密码（获取metrics等信息）
         if [[ -z "$BK_JOB_ACTUATOR_PASSWORD" ]]; then
             printf "%s=%s\n" BK_JOB_ACTUATOR_PASSWORD "$(rndpw 12)"
