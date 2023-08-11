@@ -184,6 +184,9 @@ job:
   job-analysis:
     port: 10508
     consul:
+  job-assemble:
+    port: 10600
+    consul:
 
 paas_agent:
   paas_agent:

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 用途： 安装蓝鲸的Job平台后台
- 
+
 # 安全模式
-set -euo pipefail 
+set -euo pipefail
 
 # 通用脚本框架变量
 PROGRAM=$(basename "$0")
@@ -12,29 +12,6 @@ EXITCODE=0
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
 
-# 默认的绑定端口
-declare -a MODULES=(
-    job-logsvr
-    job-manage
-    job-execute
-    job-gateway
-    job-crontab
-    job-config
-    job-backup
-    job-analysis
-)
-
-# 每个微服务模块默认的jvm内存
-declare -A JOB_MODULE_JVM_HEAP=(
-    ["job-logsvr"]=512m
-    ["job-manage"]=1g
-    ["job-execute"]=1g
-    ["job-gateway"]=512m
-    ["job-crontab"]=512m
-    ["job-config"]=256m
-    ["job-backup"]=512m
-    ["job-analysis"]=1g
-)
 
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
@@ -46,15 +23,22 @@ MODULE=job
 
 ENV_FILE=
 
+# 安装的子模块
+MODULES=()
+
+# 运行的模式
+RUN_MODE=stable
+
 usage () {
     cat <<EOF
-用法: 
+用法:
     $PROGRAM [ -h --help -?  查看帮助 ]
             [ -m, --module      [可选] "安装的子模块(${MODULES[*]}), 默认都会安装" ]
             [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
-            [ -s, --srcdir      [必填] "从该目录拷贝open_paas/module目录到--prefix指定的目录" ]
-            [ -p, --prefix          [可选] "安装的目标路径，默认为/data/bkee" ]
-            [ -l, --log-dir         [可选] "日志目录,默认为$PREFIX/logs/open_paas" ]
+            [ -s, --srcdir      [必填] "从该目录拷贝 $MODULE_SRC_DIR/$MODULE 目录到 --prefix 指定的目录" ]
+            [ -p, --prefix      [可选] "安装的目标路径，默认为 $PREFIX" ]
+            [ -l, --log-dir     [可选] "日志目录,默认为$PREFIX/logs/$MODULE" ]
+            [ --run-mode        [可选] "选择作业平台的模式：lite & stable 默认为：$RUN_MODE"]
             [ -v, --version     [可选] 查看脚本版本号 ]
 EOF
 }
@@ -89,7 +73,7 @@ version () {
 
 # 解析命令行参数，长短混合模式
 (( $# == 0 )) && usage_and_exit 1
-while (( $# > 0 )); do 
+while (( $# > 0 )); do
     case "$1" in
         -e | --env-file)
             shift
@@ -107,22 +91,26 @@ while (( $# > 0 )); do
             shift
             LOG_DIR=$1
             ;;
+        --run-mode)
+            shift
+            RUN_MODE=$1
+            ;;
         --help | -h | '-?' )
             usage_and_exit 0
             ;;
         --version | -v | -V )
-            version 
+            version
             exit 0
             ;;
         -*)
             error "不可识别的参数: $1"
             ;;
-        *) 
+        *)
             break
             ;;
     esac
-    shift 
-done 
+    shift
+done
 
 LOG_DIR=${LOG_DIR:-$PREFIX/logs/job}
 
@@ -139,21 +127,21 @@ fi
 
 # 安装用户和配置目录
 id -u blueking &>/dev/null || \
-    { echo "<blueking> user has not been created, please check ./bin/update_bk_env.sh"; exit 1; } 
+    { echo "<blueking> user has not been created, please check ./bin/update_bk_env.sh"; exit 1; }
 
 install -o blueking -g blueking -d "${LOG_DIR}"
-install -o blueking -g blueking -m 755 -d /etc/blueking/env 
+install -o blueking -g blueking -m 755 -d /etc/blueking/env
 install -o blueking -g blueking -m 755 -d "$PREFIX/job"
 install -o blueking -g blueking -m 755 -d /var/run/job
 install -o blueking -g blueking -m 755 -d "$PREFIX/public/job"  # 上传下载目录
 
 # 拷贝模块目录到$PREFIX
-rsync -a --delete "${MODULE_SRC_DIR}"/job "$PREFIX/" 
+rsync -a --delete "${MODULE_SRC_DIR}"/job "$PREFIX/"
 
 # 渲染配置
 "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
     -e "$ENV_FILE" \
-    "$MODULE_SRC_DIR"/$MODULE/support-files/templates/\#etc#job#*
+    "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*
 
 # 生成keystore, truststore
 source "$ENV_FILE"  # 加载密码和证书路径的环境变量
@@ -199,17 +187,37 @@ Description=Bk Job target to allow start/stop all bk-job-*.service at once
 WantedBy=multi-user.target blueking.target
 EOF
 
-for m in "${MODULES[@]}"; do
-    short_m=${m//job-/}
-    cat <<EOF > /etc/sysconfig/bk-${m}
-SPRING_PROFILE="-Dspring.profiles.active=native,prod"
-CONFIG_FILE="-Dspring.config.additional-location=file://${PREFIX}/etc/job/application-${short_m}.yml"
-CONFIG_DIR="-DBK_JOB_CONFIG_DIR=${PREFIX}/etc/job"
-LOG_DIR="-Djob.log.dir=${PREFIX}/logs/job"
-BINARY=${PREFIX}/job/backend/${m}/${m}.jar
-JAVA_OPTS="-Xms${JOB_MODULE_JVM_HEAP[$m]} -Xmx${JOB_MODULE_JVM_HEAP[$m]}"
+# 判断是否存在 yq 命令
+if ! command -v yq &>/dev/null; then
+    error "yq: command not found"
+fi
+
+# 获取安装的子模块
+if [[ $RUN_MODE == "lite" ]]; then
+    while IFS= read -r module; do
+    MODULES+=("$module")
+    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy_assemble.yml")
+elif [[ $RUN_MODE == "stable" ]]; then
+    while IFS= read -r module; do
+    MODULES+=("$module")
+    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy.yml")
+fi
+
+
+for m in ${MODULES[@]}; do
+    #short_m=${m//job-/}
+
+    if [[ $RUN_MODE == "lite" ]]; then
+        cat <<EOF > /etc/sysconfig/bk-"${m}"
+STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy_assemble.yml)"
 EOF
-    cat <<EOF > /usr/lib/systemd/system/bk-${m}.service
+    elif [[ $RUN_MODE == "stable" ]]; then
+        cat <<EOF > /etc/sysconfig/bk-"${m}"
+STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy.yml)"
+EOF
+    fi
+
+    cat <<EOF > /usr/lib/systemd/system/bk-"${m}".service
 [Unit]
 Description=bk-${m}.service
 After=network-online.target
@@ -220,7 +228,7 @@ User=blueking
 EnvironmentFile=-/etc/sysconfig/bk-${m}
 WorkingDirectory=${PREFIX}/job/backend/${m}
 ExecStartPost=/bin/bash -c 'until [ \$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8500/v1/agent/health/service/name/${m}?pretty) == 200 ]; do echo "waiting ${m} online";sleep 1; done'
-ExecStart=/usr/bin/java -server -Dfile.encoding=UTF-8 \$SPRING_PROFILE \$CONFIG_FILE \$LOG_DIR \$CONFIG_DIR \$JAVA_OPTS -jar \$BINARY
+ExecStart=/usr/bin/java \$STARTUP_ARGS
 StandardOutput=journal
 StandardError=journal
 SuccessExitStatus=143
@@ -230,19 +238,17 @@ TimeoutStopSec=60
 TimeoutStartSec=180
 Restart=always
 RestartSec=3s
-
 [Install]
 WantedBy=bk-job.target
 EOF
+
     # 启动依赖job-config的启动
-    if [[ $m != job-config ]]; then
-        sed -i '/WorkingDirectory/a ExecStartPre=/bin/bash -c "until host job-config.service.consul; do sleep 1; done"' /usr/lib/systemd/system/bk-${m}.service
+    if [[ $RUN_MODE == "stable" ]]; then
+        if [[ $m != job-config ]]; then
+            sed -i '/WorkingDirectory/a ExecStartPre=/bin/bash -c "until host job-config.service.consul; do sleep 1; done"' /usr/lib/systemd/system/bk-"${m}".service
+        fi
     fi
 done
-
-# job-gateway需要开启access日志
-sed -i '/^CONFIG_DIR=/d' /etc/sysconfig/bk-job-gateway
-sed -i '/^CONFIG_FILE=/a CONFIG_DIR="-DBK_JOB_CONFIG_DIR='${PREFIX}'/etc/job -Dreactor.netty.http.server.accessLogEnabled=true"' /etc/sysconfig/bk-job-gateway
 
 chown -R blueking.blueking "$PREFIX/job" "$LOG_DIR" "$PREFIX/etc/job"
 

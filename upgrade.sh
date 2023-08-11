@@ -113,7 +113,7 @@ case "$MODULE" in
         bkiam_migrate job
         # 更新后端
         emphasize "update job backend on all job hosts"
-        $PCMD -m job "$CTRL_DIR/bin/release_job_backend.sh -u -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -e $CTRL_DIR/bin/04-final/${MODULE}.env"
+        $PCMD -m job "$CTRL_DIR/bin/release_job_backend.sh -u -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -e $CTRL_DIR/bin/04-final/${MODULE}.env --run-mode ${BK_JOB_RUN_MODE}"
         # 更新前端
         emphasize "update job frontend on nginx hosts"
         $PCMD -m nginx "$CTRL_DIR/bin/release_job_frontend.sh -p $BK_HOME -s $BK_PKG_SRC_PATH -B $BK_PKG_SRC_PATH/backup -i \$BK_JOB_API_PUBLIC_URL"
