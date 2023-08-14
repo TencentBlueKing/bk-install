@@ -54,7 +54,8 @@ class Message(object):
         'cmdb' : ["cmdb-admin","cmdb-api","cmdb-auth","cmdb-cloud","cmdb-cache","cmdb-core","cmdb-datacollection",
                                             "cmdb-event","cmdb-host","cmdb-op","cmdb-proc","cmdb-task","cmdb-topo","cmdb-web"], # cmdb 去掉 cmdb-synchronize, 并且 cmdb-operation更名为cmdb-op
         "gse" : ["gse_cluster","gse_task","gse_file","gse_data","gse_proc"],
-        "job": ["job-config","job-gateway","job-manage","job-execute","job-crontab","job-logsvr","job-backup","job-analysis"],
+        # 社区版 JOB 默认关联轻量化的服务模版进程服务，但会创建完整版的服务进程模版。
+        "job": ["job-gateway", "job-assemble"],
         "monitor": ["influxdb-proxy","monitor","grafana","transfer",],
         "nodeman": ["nodeman-api"],
         'iam': ['bk-iam'],
