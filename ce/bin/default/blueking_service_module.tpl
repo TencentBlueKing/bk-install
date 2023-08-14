@@ -20,6 +20,7 @@ job-logsvr	java	job-logsvr	job-logsvr.jar	0.0.0.0	10504	TCP
 job-manage	java	job-manage	job-manage.jar	0.0.0.0	10505	TCP
 job-backup	java	job-backup	job-backup.jar	0.0.0.0	10507	TCP
 job-analysis	java	job-analysis	job-analysis.jar	0.0.0.0	10508	TCP
+job-assemble	java	job-assemble	job-assemble.jar	0.0.0.0	10600	TCP
 						
 gse_data	gse_data	gse_data		0.0.0.0	28625	TCP
 gse_proc	gse_proc	gse_proc		0.0.0.0	52030	TCP

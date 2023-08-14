@@ -7,6 +7,8 @@ jobv3	job-logsvr
 jobv3	job-manage
 jobv3	job-backup
 jobv3	job-analysis
+jobv3	job-assemble
+	
 cmdb	cmdb-admin
 cmdb	cmdb-api
 cmdb	cmdb-auth
