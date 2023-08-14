@@ -31,6 +31,9 @@ RPM_DEP=(gcc mysql-devel libevent-devel libXext libXrender fontconfig)
 ENV_FILE=/data/install/bin/04-final/bkmonitorv3.env
 BIND_ADDR=127.0.0.1
 
+# 运行的模式
+RUN_MODE=stable
+
 # error exit handler
 err_trap_handler () {
     MYSELF="$0"
@@ -48,6 +51,7 @@ usage () {
             [ -m, --module      [必选] "安装的子模块(${PROJECTS[*]})" ]
             [ --python-path     [可选] "指定创建virtualenv时的python二进制路径，默认为/opt/py27/bin/python" ]
             [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
+            [ -M, --mode        [可选] "选择监控部署的模式：lite & stable" 默认为：$RUN_MODE]
 
             [ -s, --srcdir      [必填] "从该目录拷贝$MODULE/project目录到--prefix指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
@@ -112,6 +116,10 @@ while (( $# > 0 )); do
         --cert-path)
             shift
             CERT_PATH=$1
+            ;;
+        -M | --mode )
+            shift
+            RUN_MODE=$1
             ;;
         --help | -h | '-?' )
             usage_and_exit 0
@@ -219,6 +227,10 @@ case $BKMONITOR_MODULE in
         export KAFKA_HOST=$BK_MONITOR_KAFKA_HOST
         export KAFKA_PORT=$BK_MONITOR_KAFKA_PORT
         set -u
+
+        # 生成不同模式的 Supervisor 配置参数文件
+        log "generate $RUN_MODE supervisor configuration file"
+        bash "${PREFIX}"/bkmonitorv3/monitor/bin/release.sh "$RUN_MODE"
 
         # 生成service定义配置
         cat > /usr/lib/systemd/system/bk-monitor.service <<EOF

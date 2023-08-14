@@ -111,35 +111,53 @@ usermgr:
     port: 8009
     consul: usermgr
 
+# GSE V1
+#gse:
+#  gse_api:
+#    port: 59313 
+#    consul: gse-api
+#  gse_task:
+#    port: 48673 
+#    consul: gse-task
+#  gse_btsvr:
+#    port:
+#    consul:
+#  gse_data:
+#    port: 58625
+#    consul: gse-data
+#  gse_dba:
+#    port:
+#    consul:
+#  gse_alarm:
+#    port:
+#    consul:
+#  gse_procmgr:
+#    port: 52030 
+#    consul: gse-procmgr
+#  gse_dataop:
+#    port:
+#    consul:
+#  gse_config:
+#    port: 59702
+#    consul: gse-config
 
+# GSE v2
 gse:
-  gse_api:
-    port: 59313 
-    consul: gse-api
   gse_task:
-    port: 48673 
+    port: 48673
     consul: gse-task
-  gse_btsvr:
-    port:
-    consul:
   gse_data:
-    port: 58625
+    port: 28625
     consul: gse-data
-  gse_dba:
-    port:
-    consul:
-  gse_alarm:
-    port:
-    consul:
-  gse_procmgr:
-    port: 52030 
+  gse_proc:
+    port: 52030
     consul: gse-procmgr
-  gse_dataop:
-    port:
-    consul:
-  gse_config:
-    port: 59702
-    consul: gse-config
+  gse_file:
+    port: 28925
+    consul: gse-file
+  gse_cluster:
+    port: 28668
+    consul: gse-cluster
 
 job:
   job-config:
@@ -165,6 +183,9 @@ job:
     consul:
   job-analysis:
     port: 10508
+    consul:
+  job-assemble:
+    port: 10600
     consul:
 
 paas_agent:
@@ -193,8 +214,6 @@ bkiam_search_engine:
     port: 5003
     consul: bkiam-search-engine
 
-
-
 redis:
   default:
     port: 6379
@@ -208,6 +227,17 @@ redis:
     port: 6379
     consul: redis-paasplugins
     name: redis
+redis_cluster:
+# default 作为 ee 的默认启动端口，single 作为ce单点部署启动的端口列表
+  default:
+    port: 6380
+    consul: redis-cluster
+    name: redis-cluster
+  single:
+    port: 6380,6381,6382
+    consul: redis-cluster
+    name: redis-cluster
+
 redis_sentinel:
   default:
     # 默认第一个端口为单节点
@@ -321,9 +351,6 @@ beanstalk:
 
 # 6000-6020 为 apigw 预留端口
 apigw:
-  api-support:
-    port: 6002
-    consul: apigw-support 
   dashboard:
     port: 6000
     consul: apigw-dashboard
@@ -345,3 +372,11 @@ apigw:
   thunderstone:
     port: 6012
     consul:
+  apigateway-core-api:
+    port: 6013
+    consul: apigw-core-api
+
+etcd:
+  default:
+    port: 2379
+    consul: etcd

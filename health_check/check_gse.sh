@@ -51,9 +51,11 @@ check_gse_worker () {
 }
 
 declare -A SVC_PORT_MAP=(
-    [gse-api]=59313
+    [gse-data]=28625
     [gse-procmgr]=52030
     [gse-task]=48673
+    [gse-file]=28925
+    [gse-cluster]=28668
 )
 
 check_gse_port_listen () {
