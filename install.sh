@@ -82,13 +82,26 @@ install_pypi () {
     reg_consul_svc "${_project_consul["$module,default"]}" "${http_port}" "$LAN_IP"
 }
 
+_install_yq () {
+
+    local module=$1
+
+    if [[ "$module" == "controller" ]]; then
+         rsync -a "${CTRL_DIR}"/bin/yq /usr/local/bin/ && chmod +x /usr/local/bin/yq
+    else
+        "${SELF_DIR}"/pcmd.sh -m "$module" "rsync -a ${CTRL_DIR}/bin/yq /usr/local/bin/ && chmod +x /usr/local/bin/yq"
+    fi
+}
+
 install_controller () {
     emphasize "install controller source"
     local extar="$1"
     if [ -z "${extar}" ]; then
         "${CTRL_DIR}"/bin/install_controller.sh
+        _install_yq controller
     else
         "${CTRL_DIR}"/bin/install_controller.sh -e
+        _install_yq controller
     fi
 }
 
@@ -980,9 +993,9 @@ _install_job_frontend () {
 
 _install_job_backend () {
     local module=job
-    local target_name=$(map_module_name $module)
-    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
-    local projects=${_projects[$module]}
+    #local target_name=$(map_module_name $module)
+    #source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
+    #local projects=${_projects[$module]}
 
     emphasize "grant rabbitmq private for ${module}"
     grant_rabbitmq_pri ${module} "${BK_JOB_IP_COMMA}"
@@ -995,10 +1008,10 @@ _install_job_backend () {
     migrate_sql ${module}
 
     emphasize "sync yq commands to /usr/local/bin/"
-    ${SELF_DIR}/pcmd.sh -m $module "rsync -a ${CTRL_DIR}/bin/yq /usr/local/bin/ && chmod +x /usr/local/bin/yq"
+    _install_yq ${module}
 
     # job依赖java环境
-    ${SELF_DIR}/pcmd.sh -H ${BK_JOB_IP_COMMA} "if ! which java >/dev/null;then ${CTRL_DIR}/bin/install_java.sh -p ${INSTALL_PATH} -f ${BK_PKG_SRC_PATH}/java8.tgz;fi"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_JOB_IP_COMMA}" "if ! which java >/dev/null;then ${CTRL_DIR}/bin/install_java.sh -p ${INSTALL_PATH} -f ${BK_PKG_SRC_PATH}/java8.tgz;fi"
 
     # mongod用户授权
     emphasize "grant mongodb privilege for ${module}"
@@ -1009,29 +1022,27 @@ _install_job_backend () {
     # 单台部署全部
     emphasize "install ${module} on host: ${BK_JOB_IP_COMMA}}"
     cost_time_attention
-    ${SELF_DIR}/pcmd.sh -H ${BK_JOB_IP_COMMA} "${CTRL_DIR}/bin/install_job.sh -e ${CTRL_DIR}/bin/04-final/job.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --run-mode ${BK_JOB_RUN_MODE}"
-
+    "${SELF_DIR}"/pcmd.sh -H "${BK_JOB_IP_COMMA}" "${CTRL_DIR}/bin/install_job.sh -e ${CTRL_DIR}/bin/04-final/job.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --run-mode ${BK_JOB_RUN_MODE}"
+    
     emphasize "start bk-${module}.target on host: ${BK_JOB_IP_COMMA}"
     cost_time_attention "bk-job.target takes a while to fully boot up, please wait!"
-    ${SELF_DIR}/pcmd.sh -H ${BK_JOB_IP_COMMA} "systemctl start bk-job.target"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_JOB_IP_COMMA}" "systemctl start bk-job.target"
 
     # 检查
     emphasize "${module} health check"
-    ${SELF_DIR}/pcmd.sh -m $module "$CTRL_DIR/health_check/check_job.sh -p ${INSTALL_PATH} --run-mode $BK_JOB_RUN_MODE" 
+    "${SELF_DIR}"/pcmd.sh -m $module "$CTRL_DIR/health_check/check_job.sh -p ${INSTALL_PATH} --run-mode $BK_JOB_RUN_MODE" 
 
     # 权限模型
     emphasize "Registration authority model for ${module}"
     bkiam_migrate ${module}
 
-    # nfs
-    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: ${BK_NFS_IP0}"
-        pcmdrc job "_mount_shared_nfs job"
-    fi
+    emphasize "sync open_paas data to bkauth"
+    sync_secret_to_bkauth
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
+
 
 install_usermgr () {
     local module=usermgr
