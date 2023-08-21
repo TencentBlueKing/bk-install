@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用途：更新蓝鲸的用户管理后台
+# 用途： 更新蓝鲸的bknodeman后台api
 
 # 安全模式
 set -euo pipefail 
@@ -15,8 +15,8 @@ EXITCODE=0
 
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-MODULE=usermgr
-USERMGR_MODULE=api
+MODULE=bknodeman
+BKNODEMAN_MODULE=nodeman
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
 # 蓝鲸产品包解压后存放的默认目录
@@ -24,7 +24,7 @@ MODULE_SRC_DIR=/data/src
 # 渲染配置文件用的脚本
 RENDER_TPL=${SELF_DIR}/render_tpl
 # 渲染配置用的环境变量文件
-ENV_FILE=${SELF_DIR}/04-final/usermgr.env
+ENV_FILE=${SELF_DIR}/04-final/bknodeman.env
 # 如果使用tgz来更新，则从该目录来找tgz文件
 RELEASE_DIR=/data/release
 # 如果使用tgz来更新，该文件的文件名
@@ -186,7 +186,7 @@ if (( EXITCODE > 0 )); then
 fi
 
 # 备份老的包，并解压新的
-tar -czf "$BACKUP_DIR/usermgr_$(date +%Y%m%d_%H%M).tgz" -C "$PREFIX" usermgr etc/supervisor-usermgr-api.conf
+tar -czf "$BACKUP_DIR/bknodeman_$(date +%Y%m%d_%H%M).tgz" -C "$PREFIX" bknodeman etc/supervisor-bknodeman-nodeman.conf
 
 # 更新文件（因为是python的包，用--delete为了删除一些pyc的缓存文件）
 if [[ $RELEASE_TYPE = tgz ]]; then
@@ -198,43 +198,45 @@ if [[ $RELEASE_TYPE = tgz ]]; then
     tar -xf "$TGZ_PATH" -C "$TMP_DIR"/
     # 更新全局文件
     log "updating 全局文件 ..."
-    rsync -a --delete "${TMP_DIR}/usermgr/" "$PREFIX/usermgr/"
+    rsync -a --delete --exclude=media "${TMP_DIR}/bknodeman/" "$PREFIX/bknodeman/"
 else
-    rsync -a --delete "${MODULE_SRC_DIR}/usermgr/" "$PREFIX/usermgr/"
+    rsync -a --delete --exclude=media "${MODULE_SRC_DIR}/bknodeman/" "$PREFIX/bknodeman/"
 fi
 
-USERMGR_VERSION=$( cat "$PREFIX"/usermgr/VERSION )
+BKNODEMAN_VERSION=$( cat "${PREFIX}"/bknodeman/VERSION )
 
 # 渲染配置
 if [[ $UPDATE_CONFIG -eq 1 ]]; then
     source /etc/blueking/env/local.env
-    "$SELF_DIR"/render_tpl -u -m usermgr -p "$PREFIX" \
+    "$SELF_DIR"/render_tpl -u -m bknodeman -p "$PREFIX" \
         -e "$ENV_FILE" \
-        "$PREFIX"/usermgr/support-files/templates/*
+        -E LAN_IP="$LAN_IP" \
+        "$PREFIX"/bknodeman/support-files/templates/*
 else
     # 走固定配置从$PREFIX/etc下拷贝回去
-    if [[ -d "$PREFIX"/etc/usermgr ]]; then
-        rsync -av "$PREFIX"/etc/usermgr/ "$PREFIX"/usermgr/
+    if [[ -d "$PREFIX"/etc/bknodeman ]]; then
+        rsync -av "$PREFIX"/etc/bknodeman/ "$PREFIX"/bknodeman/
     fi
 fi
-chown blueking.blueking -R "$PREFIX/$MODULE"
+
 # 导入镜像
-docker load --quiet < ${MODULE_SRC_DIR}/$MODULE/support-files/images/bk-usermgr-${USERMGR_VERSION}.tar.gz
-if [ "$(docker ps --all --quiet --filter name=bk-usermgr-${USERMGR_MODULE})" != '' ]; then
-    docker rm -f bk-usermgr-${USERMGR_MODULE}
+docker load --quiet < ${MODULE_SRC_DIR}/$MODULE/support-files/images/bk-nodeman-${BKNODEMAN_VERSION}.tar.gz
+if [ "$(docker ps --all --quiet --filter name=bk-nodeman-${BKNODEMAN_MODULE})" != '' ]; then
+    docker rm -f bk-nodeman-${BKNODEMAN_MODULE}
 fi
 # 加载容器资源限额模板
 if [ -f ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl ]; then
     source ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl
-    MAX_MEM=$(eval echo \${${USERMGR_MODULE}_mem})
-    MAX_CPU_SHARES=$(eval echo \${${USERMGR_MODULE}_cpu})
+    MAX_MEM=$(eval echo \${${BKNODEMAN_MODULE}_mem})
+    MAX_CPU_SHARES=$(eval echo \${${BKNODEMAN_MODULE}_cpu})
 fi
 docker run --detach --network=host \
-    --name bk-usermgr-${USERMGR_MODULE} \
+    --name bk-nodeman-${BKNODEMAN_MODULE} \
     --cpu-shares "${MAX_CPU_SHARES:-1024}" \
-    --memory "${MAX_MEM:-512}" \
+    --memory "${MAX_MEM:-4096}" \
     --volume $PREFIX/${MODULE}:/data/bkce/${MODULE} \
     --volume $PREFIX/public/${MODULE}:/data/bkce/public/${MODULE} \
     --volume $PREFIX/logs/${MODULE}:/data/bkce/logs/${MODULE} \
-    --volume $PREFIX/etc/supervisor-usermgr-api.conf:/data/bkce/etc/supervisor-usermgr-api.conf \
-    bk-usermgr-${USERMGR_MODULE}:${USERMGR_VERSION}
+    --volume $PREFIX/etc/supervisor-bknodeman-nodeman.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf \
+    bk-nodeman-${BKNODEMAN_MODULE}:${BKNODEMAN_VERSION}
+    

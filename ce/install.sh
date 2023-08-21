@@ -625,6 +625,9 @@ _install_paas_project () {
     # paas服务器同步并安装python
     emphasize "sync and install python on host: ${BK_PAAS_IP_COMMA}"
     install_python $module
+    # install docker
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
 
     # 要加判断传入值是否正确
     for project in ${project[@]}; do
@@ -967,8 +970,9 @@ install_usermgr () {
     migrate_sql $module
     emphasize "grant rabbitmq private for ${module}"
     grant_rabbitmq_pri $module
-    emphasize "sync and install python on host: ${BK_USERMGR_IP_COMMA}"
-    install_python $module
+    # install docker
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
 
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     local projects=${_projects[$module]}
@@ -1141,8 +1145,9 @@ install_nodeman () {
     local projects=${_projects["${module}"]}
     emphasize "grant rabbitmq private for ${module}"
     grant_rabbitmq_pri $module
-    emphasize "install python on host: ${module}"
-    install_python $module
+    # install docker
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
     # 注册app_code
     emphasize "add or update appcode ${BK_NODEMAN_APP_CODE}"
     add_or_update_appcode "$BK_NODEMAN_APP_CODE" "$BK_NODEMAN_APP_SECRET"
