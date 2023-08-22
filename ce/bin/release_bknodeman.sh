@@ -235,6 +235,7 @@ docker run --detach --network=host \
     --cpu-shares "${MAX_CPU_SHARES:-1024}" \
     --memory "${MAX_MEM:-4096}" \
     --volume $PREFIX/${MODULE}:/data/bkce/${MODULE} \
+    --volume $PREFIX/cert:/data/bkce/cert \
     --volume $PREFIX/public/${MODULE}:/data/bkce/public/${MODULE} \
     --volume $PREFIX/logs/${MODULE}:/data/bkce/logs/${MODULE} \
     --volume $PREFIX/etc/supervisor-bknodeman-nodeman.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf \
