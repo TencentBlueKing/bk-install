@@ -1176,9 +1176,6 @@ install_nodeman () {
     emphasize "install consul template on host: ${module}"
     install_consul_template ${module} "${BK_NODEMAN_IP_COMMA}"
 
-    # 启动
-    "${SELF_DIR}"/pcmd.sh -m ${module} "systemctl start bk-nodeman.service"
-
     emphasize "sync open_paas data to bkauth"
     sync_secret_to_bkauth
 

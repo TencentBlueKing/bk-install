@@ -65,7 +65,7 @@ _initdata_nodeman () {
     "${CTRL_DIR}"/pcmd.sh -H "$ip" " find ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_agent/ ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_proxy/ -type f -name gse_*[ce]e-*.tgz -exec rm -fv {} \;"
 
     emphasize "copy file to nginx"
-    "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; runuser -u blueking ./bin/manage.sh copy_file_to_nginx"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "docker exec -i bk-nodeman-nodeman runuser -u blueking --bash -lc './bin/manage.sh copy_file_to_nginx'"
 
     emphasize "copy gse file to nodeman"
     gse_server_pkg=$(_find_lastet_gse_server)
@@ -77,14 +77,14 @@ _initdata_nodeman () {
     "${CTRL_DIR}"/pcmd.sh -H "$ip" "cp -a ${BK_PKG_SRC_PATH}/$gse_server_pkg ${INSTALL_PATH}/bknodeman/nodeman/official_plugin/gse_proxy/"
 
     emphasize "start gse agent packaging, please wait for moment"
-    "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;source bin/environ.sh;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; python manage.py init_agents -o stable"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "docker exec -i bk-nodeman-nodeman runuser -u blueking --bash -lc 'source bin/environ.sh; python manage.py init_agents -o stable'"
     
     emphasize "sync gse plugins to host: nodeman"
     chown -R blueking.blueking "${BK_PKG_SRC_PATH}"/gse_plugins/ 
     rsync -v "${BK_PKG_SRC_PATH}"/gse_plugins/*.tgz "$ip":"${INSTALL_PATH}"/bknodeman/nodeman/official_plugin/
 
     emphasize "init official plugins on host: nodeman"
-    "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; rm -fv ./official_plugin/pluginscripts-*.tgz; ./bin/manage.sh init_official_plugins"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "docker exec -i bk-nodeman-nodeman runuser -u blueking --bash -lc 'rm -fv ./official_plugin/pluginscripts-*.tgz; ./bin/manage.sh init_official_plugins'"
 
     emphasize "sync py36.tgz file to host:nodeman"
     rsync -avz "${BK_PKG_SRC_PATH}"/python/py36.tgz "$ip":"${INSTALL_PATH}"/public/bknodeman/download/

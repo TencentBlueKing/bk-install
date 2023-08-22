@@ -129,7 +129,7 @@ case "$MODULE" in
         fi
         if [[ "${MODULE}" =~ "bknodeman"  ]]; then
             # 更新后刷新nginx上的脚本
-            $PCMD -H "${BK_NODEMAN_IP}" 'docker exec -i bk-nodeman-nodeman runuser -u blueking ./bin/manage.sh copy_file_to_nginx'
+            $PCMD -H "${BK_NODEMAN_IP}" "docker exec -i bk-nodeman-nodeman runuser -u blueking -- bash -lc './bin/manage.sh copy_file_to_nginx'"
         fi
         _update_common_info "${MODULE}"
         ;;
