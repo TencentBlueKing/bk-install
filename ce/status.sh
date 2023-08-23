@@ -186,7 +186,6 @@ case $module in
         pcmdrc "${target_name}" "get_docker_service_status ${target_name}"
         pcmdrc "${target_name}" "get_service_status ${SERVICE["consul-template"]} ${SERVICE["nginx"]}"
         ;;
-        ;;
     paas_plugins|paas_plugin)
         pcmdrc "${BK_PAAS_IP0}" "get_service_status bk-paas-plugins-log-alert"
         pcmdrc paas "get_service_status bk-logstash-paas-app-log bk-logstash-apigw-log bk-filebeat@paas_esb_api bk-filebeat@bkapigateway_apigateway_api bk-filebeat@bkapigateway_esb_api"
