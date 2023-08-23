@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 用途：更新蓝鲸的用户管理后台
+# shellcheck disable=SC1091
 
 # 安全模式
 set -euo pipefail 
@@ -47,7 +48,6 @@ usage () {
             [ -u, --update-config   [可选] "是否更新配置文件，默认不更新。" ]
             [ -B, --backup-dir      [可选] "备份程序的目录，默认是$BACKUP_DIR" ]
             [ -v, --version         [可选] "脚本版本号" ]
-            [ -P, --python-path     [可选] "指定创建virtualenv时的python二进制路径，默认为$PYTHON_PATH" ]
 
     更新模式有两种:
     1. 使用tgz包更新，则需要指定以下参数：
@@ -118,10 +118,6 @@ while (( $# > 0 )); do
         -s | --srcdir )
             shift
             MODULE_SRC_DIR=$1
-            ;;
-        -P | --python-path )
-            shift
-            PYTHON_PATH=$1
             ;;
         --help | -h | '-?' )
             usage_and_exit 0
@@ -217,24 +213,29 @@ else
         rsync -av "$PREFIX"/etc/usermgr/ "$PREFIX"/usermgr/
     fi
 fi
+
 chown blueking.blueking -R "$PREFIX/$MODULE"
+
 # 导入镜像
-docker load --quiet < ${MODULE_SRC_DIR}/$MODULE/support-files/images/bk-usermgr-${USERMGR_VERSION}.tar.gz
-if [ "$(docker ps --all --quiet --filter name=bk-usermgr-${USERMGR_MODULE})" != '' ]; then
-    docker rm -f bk-usermgr-${USERMGR_MODULE}
+docker load --quiet < "$MODULE_SRC_DIR"/$MODULE/support-files/images/bk-usermgr-"$USERMGR_VERSION".tar.gz
+if [ "$(docker ps --all --quiet --filter name=bk-usermgr-$USERMGR_MODULE)" != '' ]; then
+    docker rm -f bk-usermgr-"$USERMGR_MODULE"
 fi
 # 加载容器资源限额模板
-if [ -f ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl ]; then
-    source ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl
-    MAX_MEM=$(eval echo \${${USERMGR_MODULE}_mem})
-    MAX_CPU_SHARES=$(eval echo \${${USERMGR_MODULE}_cpu})
+if [ -f "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl ]; then
+    # shellcheck source=/dev/null
+    source "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl
+    # shellcheck disable=SC1083
+    MAX_MEM=$(eval echo \${"${USERMGR_MODULE}"_mem})
+    # shellcheck disable=SC1083
+    MAX_CPU_SHARES=$(eval echo \${"${USERMGR_MODULE}"_cpu})
 fi
 docker run --detach --network=host \
-    --name bk-usermgr-${USERMGR_MODULE} \
+    --name bk-usermgr-"$USERMGR_MODULE" \
     --cpu-shares "${MAX_CPU_SHARES:-1024}" \
     --memory "${MAX_MEM:-512}" \
-    --volume $PREFIX/${MODULE}:/data/bkce/${MODULE} \
-    --volume $PREFIX/public/${MODULE}:/data/bkce/public/${MODULE} \
-    --volume $PREFIX/logs/${MODULE}:/data/bkce/logs/${MODULE} \
-    --volume $PREFIX/etc/supervisor-usermgr-api.conf:/data/bkce/etc/supervisor-usermgr-api.conf \
-    bk-usermgr-${USERMGR_MODULE}:${USERMGR_VERSION}
+    --volume "$PREFIX"/"$MODULE":/data/bkce/"$MODULE" \
+    --volume "$PREFIX"/public/"$MODULE":/data/bkce/public/"$MODULE" \
+    --volume "$PREFIX"/logs/"$MODULE":/data/bkce/logs/"$MODULE" \
+    --volume "$PREFIX"/etc/supervisor-usermgr-api.conf:/data/bkce/etc/supervisor-usermgr-api.conf \
+    bk-usermgr-"$USERMGR_MODULE":"$USERMGR_VERSION"

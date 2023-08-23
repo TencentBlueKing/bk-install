@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 用途： 安装蓝鲸的PaaS平台后台
+# shellcheck disable=SC1091,SC2034
 
 # 安全模式
 set -euo pipefail
@@ -20,6 +21,7 @@ declare -A PORTS=(
     ["console"]=8004
     ["apigw"]=8005
 )
+# shellcheck disable=SC2206
 declare -a MODULES=(${!PORTS[@]})
 
 # 模块安装后所在的上一级目录
@@ -27,10 +29,7 @@ PREFIX=/data/bkee
 
 # 模块目录的上一级目录
 MODULE_SRC_DIR=/data/src
-
 MODULE=open_paas
-
-#RPM_DEP=(gcc mysql mysql-devel openssl-devel libevent-devel bzip2-devel sqlite-devel tk-devel gdbm-devel libffi-devel db4-devel libpcap-devel xz-devel pcre-devel nfs-utils mailcap)
 
 ENV_FILE=
 BIND_ADDR=127.0.0.1
@@ -41,12 +40,11 @@ usage () {
     $PROGRAM [ -h --help -?  查看帮助 ]
             [ -b, --bind        [可选] "监听的网卡地址，默认为127.0.0.1" ]
             [ -m, --module      [可选] "安装的子模块(${MODULES[*]}), 默认都会安装" ]
-            [ -P, --python-path [可选] "指定创建virtualenv时的python二进制路径" ]
             [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
 
             [ -s, --srcdir      [必填] "从该目录拷贝open_paas/module目录到--prefix指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
-            [ --cert-path       [可选] "企业版证书存放目录，默认为$PREFIX/cert" ]
+            [ --cert-path       [可选] "证书存放目录，默认为$PREFIX/cert" ]
             [ -l, --log-dir     [可选] "日志目录,默认为$PREFIX/logs/open_paas" ]
             
             [ -v, --version     [可选] 查看脚本版本号 ]
@@ -96,10 +94,6 @@ while (( $# > 0 )); do
         -e | --env-file)
             shift
             ENV_FILE="$1"
-            ;;
-        -P | --python-path )
-            shift
-            PYTHON_PATH=$1
             ;;
         -s | --srcdir )
             shift
@@ -180,25 +174,28 @@ case $PAAS_MODULE in
             -E LAN_IP="$BIND_ADDR" -e "$ENV_FILE" \
             "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*"${PAAS_MODULE}"*
         # 导入镜像
-        docker load --quiet < ${MODULE_SRC_DIR}/open_paas/support-files/images/bk-paas-${PAAS_VERSION}.tar.gz
-        if [ "$(docker ps --all --quiet --filter name=bk-paas-${PAAS_MODULE})" != '' ]; then
-            docker rm -f bk-paas-${PAAS_MODULE}
+        docker load --quiet < "${MODULE_SRC_DIR}"/open_paas/support-files/images/bk-paas-"${PAAS_VERSION}".tar.gz
+        if [ "$(docker ps --all --quiet --filter name=bk-paas-"${PAAS_MODULE}")" != '' ]; then
+            docker rm -f bk-paas-"${PAAS_MODULE}"
         fi
         # 加载容器资源限额模板
-        if [ -f ${MODULE_SRC_DIR}/open_paas/support-files/images/resource.tpl ]; then
-            source ${MODULE_SRC_DIR}/open_paas/support-files/images/resource.tpl
-            MAX_MEM=$(eval echo \${${PAAS_MODULE}_mem})
-            MAX_CPU_SHARES=$(eval echo \${${PAAS_MODULE}_cpu})
+        if [ -f "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl ]; then
+            source "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl
+            # shellcheck disable=SC1083
+            MAX_MEM=$(eval echo \${"${PAAS_MODULE}"_mem})
+            # shellcheck disable=SC1083
+            MAX_CPU_SHARES=$(eval echo \${"${PAAS_MODULE}"_cpu})
         fi
         docker run --detach --network=host \
-            --name bk-paas-${PAAS_MODULE} \
+            --name bk-paas-"$PAAS_MODULE" \
             --cpu-shares "${MAX_CPU_SHARES:-1024}" \
             --memory "${MAX_MEM:-512}" \
-            --volume $PREFIX/open_paas:/data/bkce/open_paas \
-            --volume $PREFIX/public/open_paas:/data/bkce/public/open_paas \
-            --volume $PREFIX/logs/open_paas:/data/bkce/logs/open_paas \
-            --volume $PREFIX/etc/uwsgi-open_paas-${PAAS_MODULE}.ini:/data/bkce/etc/uwsgi-open_paas-${PAAS_MODULE}.ini \
-            bk-paas-${PAAS_MODULE}:${PAAS_VERSION}
+            --volume "$PREFIX"/open_paas:/data/bkce/open_paas \
+            --volume "$CERT_PATH":/data/bkce/cert \
+            --volume "$PREFIX"/public/open_paas:/data/bkce/public/open_paas \
+            --volume "$PREFIX"/logs/open_paas:/data/bkce/logs/open_paas \
+            --volume "$PREFIX"/etc/uwsgi-open_paas-"$PAAS_MODULE".ini:/data/bkce/etc/uwsgi-open_paas-"$PAAS_MODULE".ini \
+            bk-paas-"$PAAS_MODULE":"$PAAS_VERSION"
         ;;
     *)
         echo "unknown $PAAS_MODULE"

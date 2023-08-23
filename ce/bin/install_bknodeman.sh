@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 用途： 安装蓝鲸的节点管理后台(bknodeman/nodeman)
+# shellcheck disable=SC1091,2034
  
 # 安全模式
 set -euo pipefail 
@@ -35,11 +36,11 @@ usage () {
 用法: 
     $PROGRAM [ -h --help -?  查看帮助 ]
             [ -b, --bind        [可选] "监听的网卡地址，默认为127.0.0.1" ]
-            [ --python-path     [可选] "指定创建virtualenv时的python二进制路径" ]
             [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
 
             [ -s, --srcdir      [必选] "从该目录拷贝bknodeman目录到--prefix指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
+            [ --cert-path       [可选] "证书存放目录，默认为$PREFIX/cert" ]
             [ --log-dir         [可选] "日志目录,默认为$PREFIX/logs/bknodeman" ]
             [ -w, --outer-ip    [可选] "节点管理的外网地址" ]
 
@@ -78,9 +79,9 @@ while (( $# > 0 )); do
             shift
             BIND_ADDR=$1
             ;;
-        --python-path )
+        --cert-path)
             shift
-            PYTHON_PATH=$1
+            CERT_PATH=$1
             ;;
         -e | --env-file)
             shift
@@ -116,6 +117,7 @@ while (( $# > 0 )); do
 done 
 
 LOG_DIR=${LOG_DIR:-$PREFIX/logs/bknodeman}
+CERT_PATH=${CERT_PATH:-$PREFIX/cert}
 BKNODEMAN_VERSION=$( cat "${MODULE_SRC_DIR}"/bknodeman/VERSION )
 
 # 参数合法性有效性校验，这些可以使用通用函数校验。
@@ -151,7 +153,7 @@ case $BKNODEMAN_MODULE in
     nodeman)
         # 渲染配置
         if [[ -r /etc/blueking/env/local.env ]]; then
-            . /etc/blueking/env/local.env
+            source /etc/blueking/env/local.env
         fi
 
         "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
@@ -160,25 +162,27 @@ case $BKNODEMAN_MODULE in
             -E WAN_IP="$OUTER_IP" \
             "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*nodeman*
         # 导入镜像
-        docker load --quiet < ${MODULE_SRC_DIR}/$MODULE/support-files/images/bk-nodeman-${BKNODEMAN_VERSION}.tar.gz
+        docker load --quiet < "${MODULE_SRC_DIR}"/bknodeman/support-files/images/bk-nodeman-"${BKNODEMAN_VERSION}".tar.gz
         if [ "$(docker ps --all --quiet --filter name=bk-nodeman-${BKNODEMAN_MODULE})" != '' ]; then
             docker rm -f bk-nodeman-${BKNODEMAN_MODULE}
         fi
         # 加载容器资源限额模板
-        if [ -f ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl ]; then
-            source ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl
-            MAX_MEM=$(eval echo \${${BKNODEMAN_MODULE}_mem})
-            MAX_CPU_SHARES=$(eval echo \${${BKNODEMAN_MODULE}_cpu})
+        if [ -f "${MODULE_SRC_DIR}"/bknodeman/support-files/images/resource.tpl ]; then
+            source "${MODULE_SRC_DIR}"/bknodeman/support-files/images/resource.tpl
+            # shellcheck disable=SC1083
+            MAX_MEM=$(eval echo \${"${BKNODEMAN_MODULE}"_mem})
+            # shellcheck disable=SC1083
+            MAX_CPU_SHARES=$(eval echo \${"${BKNODEMAN_MODULE}"_cpu})
         fi
         docker run --detach --network=host \
-            --name bk-nodeman-${BKNODEMAN_MODULE} \
+            --name bk-nodeman-"$BKNODEMAN_MODULE" \
             --cpu-shares "${MAX_CPU_SHARES:-1024}" \
             --memory "${MAX_MEM:-4096}" \
-            --volume $PREFIX/${MODULE}:/data/bkce/${MODULE} \
-            --volume $PREFIX/cert:/data/bkce/cert \
-            --volume $PREFIX/public/${MODULE}:/data/bkce/public/${MODULE} \
-            --volume $PREFIX/logs/${MODULE}:/data/bkce/logs/${MODULE} \
-            --volume $PREFIX/etc/supervisor-bknodeman-nodeman.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf \
-            bk-nodeman-${BKNODEMAN_MODULE}:${BKNODEMAN_VERSION}
+            --volume "$PREFIX"/bknodeman:/data/bkce/bknodeman \
+            --volume "$CERT_PATH":/data/bkce/cert \
+            --volume "$PREFIX"/public/bknodeman:/data/bkce/public/bknodeman\
+            --volume "$PREFIX"/logs/bknodeman:/data/bkce/logs/bknodeman \
+            --volume "$PREFIX"/etc/supervisor-bknodeman-nodeman.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf \
+            bk-nodeman-"$BKNODEMAN_MODULE":"$BKNODEMAN_VERSION"
     ;;
 esac    

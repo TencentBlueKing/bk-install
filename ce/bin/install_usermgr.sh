@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 用途： 安装蓝鲸的用户管理后台(usermgr/api)
- 
+# shellcheck disable=SC1091
+
 # 安全模式
 set -euo pipefail 
 
@@ -31,9 +32,7 @@ usage () {
     cat <<EOF
 用法: 
     $PROGRAM [ -h --help -?  查看帮助 ]
-            [ --python-path     [可选] "指定创建virtualenv时的python二进制路径" ]
             [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
-
             [ -s, --srcdir      [必选] "从该目录拷贝usermgr目录到--prefix指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
             [ --log-dir         [可选] "日志目录,默认为$PREFIX/logs/usermgr" ]
@@ -69,10 +68,6 @@ version () {
 (( $# == 0 )) && usage_and_exit 1
 while (( $# > 0 )); do 
     case "$1" in
-        --python-path )
-            shift
-            PYTHON_PATH=$1
-            ;;
         -e | --env-file)
             shift
             ENV_FILE="$1"
@@ -136,27 +131,30 @@ case $USERMGR_MODULE in
         # 渲染配置
         "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
                 -e "$ENV_FILE" \
-                "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*api*
+                "$MODULE_SRC_DIR/$MODULE"/support-files/templates/*api*
         chown blueking.blueking -R "$PREFIX/$MODULE" "$LOG_DIR"
         # 导入镜像
-        docker load --quiet < ${MODULE_SRC_DIR}/$MODULE/support-files/images/bk-usermgr-${USERMGR_VERSION}.tar.gz
-        if [ "$(docker ps --all --quiet --filter name=bk-usermgr-${USERMGR_MODULE})" != '' ]; then
-            docker rm -f bk-usermgr-${USERMGR_MODULE}
+        docker load --quiet < "$MODULE_SRC_DIR"/$MODULE/support-files/images/bk-usermgr-"$USERMGR_VERSION".tar.gz
+        if [ "$(docker ps --all --quiet --filter name=bk-usermgr-$USERMGR_MODULE)" != '' ]; then
+            docker rm -f bk-usermgr-"$USERMGR_MODULE"
         fi
         # 加载容器资源限额模板
-        if [ -f ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl ]; then
-            source ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl
-            MAX_MEM=$(eval echo \${${USERMGR_MODULE}_mem})
-            MAX_CPU_SHARES=$(eval echo \${${USERMGR_MODULE}_cpu})
+        if [ -f "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl ]; then
+            # shellcheck source=/dev/null
+            source "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl
+            # shellcheck disable=SC1083
+            MAX_MEM=$(eval echo \${"${USERMGR_MODULE}"_mem})
+            # shellcheck disable=SC1083
+            MAX_CPU_SHARES=$(eval echo \${"${USERMGR_MODULE}"_cpu})
         fi
         docker run --detach --network=host \
-            --name bk-usermgr-${USERMGR_MODULE} \
+            --name bk-usermgr-"$USERMGR_MODULE" \
             --cpu-shares "${MAX_CPU_SHARES:-1024}" \
             --memory "${MAX_MEM:-512}" \
-            --volume $PREFIX/${MODULE}:/data/bkce/${MODULE} \
-            --volume $PREFIX/public/${MODULE}:/data/bkce/public/${MODULE} \
-            --volume $PREFIX/logs/${MODULE}:/data/bkce/logs/${MODULE} \
-            --volume $PREFIX/etc/supervisor-usermgr-api.conf:/data/bkce/etc/supervisor-usermgr-api.conf \
-            bk-usermgr-${USERMGR_MODULE}:${USERMGR_VERSION}
+            --volume "$PREFIX"/"$MODULE":/data/bkce/"$MODULE" \
+            --volume "$PREFIX"/public/"$MODULE":/data/bkce/public/"$MODULE" \
+            --volume "$PREFIX"/logs/"$MODULE":/data/bkce/logs/"$MODULE" \
+            --volume "$PREFIX"/etc/supervisor-usermgr-api.conf:/data/bkce/etc/supervisor-usermgr-api.conf \
+            bk-usermgr-"$USERMGR_MODULE":"$USERMGR_VERSION"
         ;;
 esac

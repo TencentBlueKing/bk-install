@@ -637,7 +637,7 @@ _install_paas_project () {
         for ip in "${BK_PAAS_IP[@]}"; do 
             emphasize "install ${module}(${project}) on host: ${ip}"
             cost_time_attention
-            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_paas.sh -e '${CTRL_DIR}/bin/04-final/paas.env' -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP --python-path '${python_path}'"
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_paas.sh -e '${CTRL_DIR}/bin/04-final/paas.env' -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
             emphasize "register consul ${project_consul} on host: ${ip}"
             reg_consul_svc "${project_consul}" "${project_port}" "$ip"
         done
@@ -981,7 +981,7 @@ install_usermgr () {
         for ip in "${BK_USERMGR_IP[@]}"; do
             emphasize "install ${module} ${project} on host: ${BK_USERMGR_IP_COMMA} "
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
-                     "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
+                     "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
         done
     done
@@ -1158,7 +1158,7 @@ install_nodeman () {
             cost_time_attention
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
                      "${CTRL_DIR}/bin/install_bknodeman.sh -e ${CTRL_DIR}/bin/04-final/bknodeman.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}  \
-                                --python-path ${python_path} -b \$LAN_IP -w \"\$WAN_IP\""  || err "install ${module} ${project} failed on host: ${ip}" 
+                                -b \$LAN_IP -w \"\$WAN_IP\""  || err "install ${module} ${project} failed on host: ${ip}" 
                      emphasize "register ${_project_consul[${target_name},${project}]} consul on host: ${ip}"
                      reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
         done

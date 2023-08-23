@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 用途： 更新蓝鲸的bknodeman后台api
+# shellcheck disable=SC1091,2034
 
 # 安全模式
 set -euo pipefail 
@@ -47,7 +48,7 @@ usage () {
             [ -u, --update-config   [可选] "是否更新配置文件，默认不更新。" ]
             [ -B, --backup-dir      [可选] "备份程序的目录，默认是$BACKUP_DIR" ]
             [ -v, --version         [可选] "脚本版本号" ]
-            [ -P, --python-path     [可选] "指定创建virtualenv时的python二进制路径，默认为$PYTHON_PATH" ]
+            [ --cert-path       [可选] "证书存放目录，默认为$PREFIX/cert" ]
 
     更新模式有两种:
     1. 使用tgz包更新，则需要指定以下参数：
@@ -203,6 +204,8 @@ else
     rsync -a --delete --exclude=media "${MODULE_SRC_DIR}/bknodeman/" "$PREFIX/bknodeman/"
 fi
 
+LOG_DIR=${LOG_DIR:-$PREFIX/logs/bknodeman}
+CERT_PATH=${CERT_PATH:-$PREFIX/cert}
 BKNODEMAN_VERSION=$( cat "${PREFIX}"/bknodeman/VERSION )
 
 # 渲染配置
@@ -220,24 +223,26 @@ else
 fi
 
 # 导入镜像
-docker load --quiet < ${MODULE_SRC_DIR}/$MODULE/support-files/images/bk-nodeman-${BKNODEMAN_VERSION}.tar.gz
+docker load --quiet < "${MODULE_SRC_DIR}"/bknodeman/support-files/images/bk-nodeman-"${BKNODEMAN_VERSION}".tar.gz
 if [ "$(docker ps --all --quiet --filter name=bk-nodeman-${BKNODEMAN_MODULE})" != '' ]; then
     docker rm -f bk-nodeman-${BKNODEMAN_MODULE}
 fi
 # 加载容器资源限额模板
-if [ -f ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl ]; then
-    source ${MODULE_SRC_DIR}/$MODULE/support-files/images/resource.tpl
-    MAX_MEM=$(eval echo \${${BKNODEMAN_MODULE}_mem})
-    MAX_CPU_SHARES=$(eval echo \${${BKNODEMAN_MODULE}_cpu})
+if [ -f "${MODULE_SRC_DIR}"/bknodeman/support-files/images/resource.tpl ]; then
+    source "${MODULE_SRC_DIR}"/bknodeman/support-files/images/resource.tpl
+    # shellcheck disable=SC1083
+    MAX_MEM=$(eval echo \${"${BKNODEMAN_MODULE}"_mem})
+    # shellcheck disable=SC1083
+    MAX_CPU_SHARES=$(eval echo \${"${BKNODEMAN_MODULE}"_cpu})
 fi
+
 docker run --detach --network=host \
-    --name bk-nodeman-${BKNODEMAN_MODULE} \
+    --name bk-nodeman-"$BKNODEMAN_MODULE" \
     --cpu-shares "${MAX_CPU_SHARES:-1024}" \
     --memory "${MAX_MEM:-4096}" \
-    --volume $PREFIX/${MODULE}:/data/bkce/${MODULE} \
-    --volume $PREFIX/cert:/data/bkce/cert \
-    --volume $PREFIX/public/${MODULE}:/data/bkce/public/${MODULE} \
-    --volume $PREFIX/logs/${MODULE}:/data/bkce/logs/${MODULE} \
-    --volume $PREFIX/etc/supervisor-bknodeman-nodeman.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf \
-    bk-nodeman-${BKNODEMAN_MODULE}:${BKNODEMAN_VERSION}
-    
+    --volume "$PREFIX"/bknodeman:/data/bkce/bknodeman \
+    --volume "$CERT_PATH":/data/bkce/cert \
+    --volume "$PREFIX"/public/bknodeman:/data/bkce/public/bknodeman\
+    --volume "$PREFIX"/logs/bknodeman:/data/bkce/logs/bknodeman \
+    --volume "$PREFIX"/etc/supervisor-bknodeman-nodeman.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf \
+    bk-nodeman-"$BKNODEMAN_MODULE":"$BKNODEMAN_VERSION"

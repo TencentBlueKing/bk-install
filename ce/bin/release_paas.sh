@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 用途：更新蓝鲸的PaaS平台后台
+# shellcheck disable=SC1091
 
 # 安全模式
 set -euo pipefail 
@@ -58,6 +59,7 @@ usage () {
             [ -B, --backup-dir      [可选] "备份程序的目录，默认是$BACKUP_DIR" ]
             [ -v, --version         [可选] "脚本版本号" ]
             [ -P, --python-path     [可选] "指定创建virtualenv时的python二进制路径，默认为$PYTHON_PATH" ]
+            [ --cert-path           [可选] "证书存放目录，默认为$PREFIX/cert" ]
 
     更新模式有两种:
     1. 使用tgz包更新，则需要指定以下参数：
@@ -142,14 +144,10 @@ while (( $# > 0 )); do
             shift
             PYTHON_PATH=$1
             ;;
-        --memory)
+        --cert-path)
             shift
-            MAX_CANTAINER_MEM=$1
-            ;;
-        --cpu-shares)
-            shift
-            MAX_CPU_SHARES=$1
-            ;;
+            CERT_PATH=$1
+            ;;            
         --help | -h | '-?' )
             usage_and_exit 0
             ;;
@@ -262,13 +260,15 @@ else
     rsync -a --delete --exclude=media --exclude="components/generic/apis" "${MODULE_SRC_DIR}/open_paas/" "$PREFIX/open_paas/"
 fi
 
-PAAS_VERSION=$( cat "${PREFIX}"/open_paas/VERSION )
+LOG_DIR=${LOG_DIR:-$PREFIX/logs/open_paas}
+CERT_PATH=${CERT_PATH:-$PREFIX/cert}
+PAAS_VERSION=$( cat "$PREFIX"/open_paas/VERSION )
 
 # 如果有些nfs的挂载的uid/gid不对，chown失败时，这里不至于退出
 chown -R blueking.blueking "$PREFIX/open_paas" "$PREFIX/logs/open_paas" || true
 
 # 导入镜像
-docker load --quiet < ${MODULE_SRC_DIR}/open_paas/support-files/images/bk-paas-${PAAS_VERSION}.tar.gz
+docker load --quiet < "${MODULE_SRC_DIR}"/open_paas/support-files/images/bk-paas-"${PAAS_VERSION}".tar.gz
 
 for m in "${UPDATE_MODULE[@]}"; do
     short_m=${m##bk-paas-}  # 去掉service name的bk-paas前缀
@@ -280,40 +280,41 @@ for m in "${UPDATE_MODULE[@]}"; do
             "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*"${short_m}"*
     fi
     # 加载容器资源限额模板
-    if [ -f ${MODULE_SRC_DIR}/open_paas/support-files/images/resource.tpl ]; then
-        source ${MODULE_SRC_DIR}/open_paas/support-files/images/resource.tpl
-        MAX_MEM=$(eval echo \${${short_m}_mem})
-        MAX_CPU_SHARES=$(eval echo \${${short_m}_cpu})
+    if [ -f "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl ]; then
+        source "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl
+        MAX_MEM=$(eval echo \${"${short_m}"_mem})
+        MAX_CPU_SHARES=$(eval echo \${"${short_m}"_cpu})
     fi
     # TODO: 暴力方案，后续再优化
-    if [ "$(docker ps --all --quiet --filter name=bk-paas-${short_m})" != '' ]; then
-        docker rm -f bk-paas-${short_m}
+    if [ "$(docker ps --all --quiet --filter name=bk-paas-"${short_m}")" != '' ]; then
+        docker rm -f bk-paas-"${short_m}"
     fi
     docker run --detach --network=host \
-        --name bk-paas-${short_m} \
+        --name bk-paas-"${short_m}" \
         --cpu-shares "${MAX_CPU_SHARES:-1024}" \
         --memory "${MAX_MEM:-512}" \
-        --volume $PREFIX/open_paas:/data/bkce/open_paas \
-        --volume $PREFIX/public/open_paas:/data/bkce/public/open_paas \
-        --volume $PREFIX/logs/open_paas:/data/bkce/logs/open_paas \
-        --volume $PREFIX/etc/uwsgi-open_paas-${short_m}.ini:/data/bkce/etc/uwsgi-open_paas-${short_m}.ini \
-        bk-paas-${short_m}:${PAAS_VERSION}
+        --volume "$PREFIX"/open_paas:/data/bkce/open_paas \
+        --volume "$CERT_PATH":/data/bkce/cert \
+        --volume "$PREFIX"/public/open_paas:/data/bkce/public/open_paas \
+        --volume "$PREFIX"/logs/open_paas:/data/bkce/logs/open_paas \
+        --volume "$PREFIX"/etc/uwsgi-open_paas-"${short_m}".ini:/data/bkce/etc/uwsgi-open_paas-"${short_m}".ini \
+        bk-paas-"${short_m}":"${PAAS_VERSION}"
 done
 
 # 检查本次更新的模块启动是否正常
 err_count=0
 log 'check status'
 for m in "${UPDATE_MODULE[@]}"; do
-    if [[ "$(docker inspect --format '{{.State.Status}}' ${m})"  == 'running' ]]; then
-        printf '%s: %s\n' ${m} 'running'
+    if [[ "$(docker inspect --format '{{.State.Status}}' "${m}")"  == 'running' ]]; then
+        printf '%s: %s\n' "${m}" 'running'
     else
-        printf '%s: %s\n' ${m} 'not running'
+        printf '%s: %s\n' "${m}" 'not running'
         ((err_count++))
     fi
 done
 if [[ "$err_count" == '0' ]]; then
     log "启动成功的进程数量少于更新的模块数量"
 else
-    exit 1
     log "启动成功的进程数量和更新的模块数量一致"
+    exit 1
 fi
