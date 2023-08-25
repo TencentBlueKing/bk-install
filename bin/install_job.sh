@@ -196,7 +196,7 @@ fi
 if [[ $RUN_MODE == "lite" ]]; then
     while IFS= read -r module; do
     MODULES+=("$module")
-    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy_assemble.yml")
+    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy_lite.yml")
 elif [[ $RUN_MODE == "stable" ]]; then
     while IFS= read -r module; do
     MODULES+=("$module")
@@ -209,7 +209,7 @@ for m in ${MODULES[@]}; do
 
     if [[ $RUN_MODE == "lite" ]]; then
         cat <<EOF > /etc/sysconfig/bk-"${m}"
-STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy_assemble.yml)"
+STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy_lite.yml)"
 EOF
     elif [[ $RUN_MODE == "stable" ]]; then
         cat <<EOF > /etc/sysconfig/bk-"${m}"
