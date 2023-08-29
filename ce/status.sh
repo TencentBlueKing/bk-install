@@ -165,18 +165,18 @@ case $module in
         if [ -z "${project}" ];then
             for project in ${_projects[${module}]};do
                 emphasize "status ${module} ${project} on host: ${_project_ip["${target_name},${project}"]}"
-                if [[ "${module}" =~ "log" ]]; then
-                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${module}-${project}"
+                if [[ "${project}" =~ "api" ]]; then
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_docker_service_status bk-${module}-${project}"
                 else
-                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${project}"
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${module}-${project}"
                 fi
             done
         else
             emphasize "status ${module} ${project} on host: ${_project_ip["${target_name},${project}"]}"
-            if [[ "${module}" =~ "log" ]]; then
-                pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${module}-${project}"
+            if [[ "${project}" =~ "api" ]]; then
+                pcmdrc "${_project_ip["${target_name},${project}"]}" "get_docker_service_status bk-${module}-${project}"
             else
-                pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${project}"
+                pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${module}-${project}"
             fi
         fi
         ;;

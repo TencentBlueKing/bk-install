@@ -1263,23 +1263,18 @@ install_bklog () {
     # 初始化sql
     emphasize "migrate sql for ${module}"
     migrate_sql $module 
-    emphasize "install python on host: ${module}"
-    install_python $module
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker.sh"
     # 注册app_code
     emphasize "add or update appocode ${BK_BKLOG_APP_CODE}"
     add_or_update_appcode "$BK_BKLOG_APP_CODE" "$BK_BKLOG_APP_SECRET"
 
     for project in ${projects[@]}; do
-        local python_path=$(get_interpreter_path $module $project)
         IFS="," read -r -a target_server<<<${_project_ip["${target_name},${project}"]}
         for ip in ${target_server[@]}; do
             emphasize "install ${module} ${project} on host: ${ip}"
             cost_time_attention
-            if [[ ${python_path} =~ "python" ]]; then
-                "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bklog.sh  -m ${project} --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/bklog.env -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
-            else
-                "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bklog.sh  -m ${project} -e ${CTRL_DIR}/bin/04-final/bklog.env -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
-            fi
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bklog.sh  -m ${project} -e ${CTRL_DIR}/bin/04-final/bklog.env -b \$LAN_IP -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
             emphasize "register ${_project_consul[${target_name},${project}]}  consul on host: ${ip}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
     	    emphasize "sign host as module"
