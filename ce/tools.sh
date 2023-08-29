@@ -411,14 +411,7 @@ get_spic_bk_service_status (){
 } 
 
 get_docker_service_status (){
-    local module=$1
-    local service=${2:-}
-    if [[ "$service" != '' ]]; then
-        container_name="bk-${module}-${service}"
-    else
-        container_name="bk-${module}-.*"
-    fi
-    "${CTRL_DIR}"/bin/check_containers_status.sh "${container_name}"
+    "${CTRL_DIR}"/bin/check_containers_status.sh "$@"
 }
 
 get_service_status () {

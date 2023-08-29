@@ -176,7 +176,9 @@ case $PAAS_MODULE in
         # 导入镜像
         docker load --quiet < "${MODULE_SRC_DIR}"/open_paas/support-files/images/bk-paas-"${PAAS_VERSION}".tar.gz
         if [ "$(docker ps --all --quiet --filter name=bk-paas-"${PAAS_MODULE}")" != '' ]; then
-            docker rm -f bk-paas-"${PAAS_MODULE}"
+            log "container: bk-paas-${PAAS_MODULE} already exists, stop and remove now" 
+            docker stop bk-paas-"${PAAS_MODULE}"
+            docker rm bk-paas-"${PAAS_MODULE}"
         fi
         # 加载容器资源限额模板
         if [ -f "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl ]; then

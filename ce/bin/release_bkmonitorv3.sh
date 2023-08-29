@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# 用途：更新蓝鲸的PaaS平台后台
-# shellcheck disable=SC1091
+# 用途：更新蓝鲸监控后台
 
 # 安全模式
 set -euo pipefail 
@@ -16,17 +15,20 @@ EXITCODE=0
 
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-
-PROJECTS=(
-    bk-paas-paas
-    bk-paas-appengine
-    bk-paas-esb
-    bk-paas-login
-    bk-paas-console
-    bk-paas-apigw
+declare -A PROJECTS_DIR=(
+    ["bk-monitor"]=monitor
+    ["bk-transfer"]=transfer
+    ["bk-influxdb-proxy"]=influxdb-proxy
+    ["bk-grafana"]=grafana
+    ["bk-unify-query"]=unify-query
+    ["bk-argus-api"]=argus
+    ["bk-argus-compact"]=argus
+    ["bk-argus-receive"]=argus
+    ["bk-argus-storegw"]=argus
+    ["bk-ingester"]=ingester
 )
-MODULE=open_paas
-PAAS_MODULE=all
+MODULE=bkmonitorv3
+MONITOR_MODULE=all
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
 # 蓝鲸产品包解压后存放的默认目录
@@ -34,7 +36,7 @@ MODULE_SRC_DIR=/data/src
 # 渲染配置文件用的脚本
 RENDER_TPL=${SELF_DIR}/render_tpl
 # 渲染配置用的环境变量文件
-ENV_FILE=${SELF_DIR}/04-final/paas.env
+ENV_FILE=${SELF_DIR}/04-final/bkmonitorv3.env
 # 如果使用tgz来更新，则从该目录来找tgz文件
 RELEASE_DIR=/data/release
 # 如果使用tgz来更新，该文件的文件名
@@ -45,6 +47,9 @@ BACKUP_DIR=/data/src/backup
 UPDATE_CONFIG=
 # 更新模式（tgz|src）
 RELEASE_TYPE=
+# 运行的模式
+MONITOR_RUN_MODE=stable
+
 
 usage () {
     cat <<EOF
@@ -52,14 +57,13 @@ usage () {
     $PROGRAM [ -h --help -?  查看帮助 ]
     通用参数：
             [ -p, --prefix          [可选] "安装的目标路径，默认为${PREFIX}" ]
-            [ -m, --module          [可选] "安装的子模块(${PROJECTS[*]}), 逗号分隔。all表示默认都会更新" ]
+            [ -m, --module          [可选] "安装的子模块(${!PROJECTS_DIR[@]}), 逗号分隔。all表示默认都会更新" ]
             [ -r, --render-file     [可选] "渲染蓝鲸配置的脚本路径。默认是$RENDER_TPL" ]
             [ -e, --env-file        [可选] "渲染配置文件时，使用该配置文件中定义的变量值来渲染" ]
+            [ -M, --mode            [可选] "选择监控部署的模式：lite & stable, 默认为 $MONITOR_RUN_MODE" ]
             [ -u, --update-config   [可选] "是否更新配置文件，默认不更新。" ]
             [ -B, --backup-dir      [可选] "备份程序的目录，默认是$BACKUP_DIR" ]
             [ -v, --version         [可选] "脚本版本号" ]
-            [ -P, --python-path     [可选] "指定创建virtualenv时的python二进制路径，默认为$PYTHON_PATH" ]
-            [ --cert-path           [可选] "证书存放目录，默认为$PREFIX/cert" ]
 
     更新模式有两种:
     1. 使用tgz包更新，则需要指定以下参数：
@@ -87,11 +91,6 @@ error () {
     usage_and_exit 1
 }
 
-fail () {
-    echo "$@" 1>&2
-    exit 1
-}
-
 warning () {
     echo "$@" 1>&2
     EXITCODE=$((EXITCODE + 1))
@@ -111,7 +110,7 @@ while (( $# > 0 )); do
             ;;
         -m | --module )
             shift
-            PAAS_MODULE="$1"
+            MONITOR_MODULE="$1"
             ;;
         -e | --env-file )
             shift
@@ -140,14 +139,10 @@ while (( $# > 0 )); do
             shift
             MODULE_SRC_DIR=$1
             ;;
-        -P | --python-path )
+        -M | --mode )
             shift
-            PYTHON_PATH=$1
+            MONITOR_RUN_MODE=$1
             ;;
-        --cert-path)
-            shift
-            CERT_PATH=$1
-            ;;            
         --help | -h | '-?' )
             usage_and_exit 0
             ;;
@@ -191,17 +186,21 @@ else
 fi
 
 # 判断传入的module是否符合预期
-PAAS_MODULE=${PAAS_MODULE,,}          # to lower case
-if [[ -z "$PAAS_MODULE" ]] || ! [[ $PAAS_MODULE =~ ^[a-z,-]+$ ]]; then 
-    warning "-m, --module必须指定要更新的模块名，逗号分隔：如bk-paas-esb,bk-paas-paas"
+MONITOR_MODULE=${MONITOR_MODULE,,}          # to lower case
+if [[ -z "$MONITOR_MODULE" ]] || ! [[ $MONITOR_MODULE =~ ^[a-z,-]+$ ]]; then 
+    warning "-m, --module必须指定要更新的模块名，逗号分隔：如bk-monitor,bk-transfer"
 fi
 # 处理待更新的模块名
-PAAS_ENABLED_MODULE=()
-readarray -t PAAS_ENABLED_MODULE < \
-    <( grep -E '^paas-.*' "$PREFIX/.installed_module" )
-# 只统计数量
-if (( ${#PAAS_ENABLED_MODULE[@]} == 0 )); then 
-    warning "there is no enabled bk-paas-* service on this host"
+MONITOR_ENABLED_MODULE=()
+readarray -t MONITOR_ENABLED_MODULE < \
+    <(systemctl list-unit-files --state=enabled --type=service \
+        | awk '/^bk-(transfer|influxdb-proxy|grafana|unify-query|argus-api|argus-receive|argus-storegw|argus-comact|ingester).service/ { sub(".service","",$1); print $1 }')
+if (( ${#MONITOR_ENABLED_MODULE[@]} == 0 )); then 
+    warning "there is no enabled bk-(transfer|influxdb-proxy|grafana|unify-query|argus-api|argus-receive|argus-storegw|argus-comact|ingester) systemd service on this host"
+fi
+# 兼容 monitor 模块运行在 docker 的情况，但并不一定准确
+if [[ "$(grep monitorv3_monitor ${PREFIX}/.installed_module)" != '' ]]; then
+    MONITOR_ENABLED_MODULE+=(bk-monitor)
 fi
 ### 文件/文件夹是否存在判断
 # 通用的变量
@@ -224,14 +223,14 @@ if (( EXITCODE > 0 )); then
 fi
 
 # 解析需要更新的模块，如果是all，则包含所有模块
-if [[ $PAAS_MODULE = all ]]; then
-    UPDATE_MODULE=("${PAAS_ENABLED_MODULE[@]}")
+if [[ $MONITOR_MODULE = all ]]; then
+    UPDATE_MODULE=("${MONITOR_ENABLED_MODULE[@]}")
 else
-    IFS=, read -ra UPDATE_MODULE <<<"$PAAS_MODULE"
+    IFS=, read -ra UPDATE_MODULE <<<"$MONITOR_MODULE"
     # 删除那些本机并未启用的service
     UPDATE_MODULE_CNT=${#UPDATE_MODULE[@]}
     for((i=0;i< UPDATE_MODULE_CNT;i++)); do
-        if ! is_string_in_array "${UPDATE_MODULE[$i]}" "${PAAS_ENABLED_MODULE[@]}"; then
+        if ! is_string_in_array "${UPDATE_MODULE[$i]}" "${MONITOR_ENABLED_MODULE[@]}"; then
             echo "${UPDATE_MODULE[$i]} is not enabled on this host"
             unset "UPDATE_MODULE[$i]"
         fi
@@ -243,10 +242,9 @@ if [[ ${#UPDATE_MODULE[@]} -eq 0 ]]; then
     exit 0
 fi
 
-# 备份（需要排除media目录，这个目录主要是用户上传的saas，会比较大）
-tar --exclude=open_paas/paas/media -czf "$BACKUP_DIR/open_paas_$(date +%Y%m%d_%H%M).tgz" -C "$PREFIX" open_paas
+# 备份老的包，并解压新的
+tar -czf "$BACKUP_DIR/bkmonitorv3_$(date +%Y%m%d_%H%M).tgz" -C "$PREFIX" bkmonitorv3
 
-# 更新文件（因为是python的包，用--delete为了删除一些pyc的缓存文件）
 if [[ $RELEASE_TYPE = tgz ]]; then
     # 创建临时目录
     TMP_DIR=$(mktemp -d /tmp/bkrelease_${MODULE}_XXXXXX)
@@ -254,69 +252,76 @@ if [[ $RELEASE_TYPE = tgz ]]; then
 
     log "extract $TGZ_PATH to $TMP_DIR"
     tar -xf "$TGZ_PATH" -C "$TMP_DIR"/
-    # 更新全局文件
-    log "updating 全局文件 ..."
-    rsync -a --delete --exclude=media --exclude="components/generic/apis" "${TMP_DIR}/open_paas/" "$PREFIX/open_paas/"
+    SRC_DIR="${TMP_DIR}/bkmonitorv3/"
 else
-    rsync -a --delete --exclude=media --exclude="components/generic/apis" "${MODULE_SRC_DIR}/open_paas/" "$PREFIX/open_paas/"
+    SRC_DIR="${MODULE_SRC_DIR}/bkmonitorv3/"
+    rsync -a --delete "${MODULE_SRC_DIR}/bkmonitorv3/" "$PREFIX/bkmonitorv3/"
 fi
 
-LOG_DIR=${LOG_DIR:-$PREFIX/logs/open_paas}
-CERT_PATH=${CERT_PATH:-$PREFIX/cert}
-PAAS_VERSION=$( cat "$PREFIX"/open_paas/VERSION )
+# 更新程序文件（因为是python的包，用--delete为了删除一些pyc的缓存文件）
+log "updating 公共文件 ..."
+rsync -a --delete "${SRC_DIR}/support-files/" "$PREFIX/bkmonitorv3/support-files/"
+rsync -a "${SRC_DIR}/projects.yaml" "${SRC_DIR}/VERSION" "$PREFIX/bkmonitorv3/"
 
-# 如果有些nfs的挂载的uid/gid不对，chown失败时，这里不至于退出
-chown -R blueking.blueking "$PREFIX/open_paas" "$PREFIX/logs/open_paas" || true
+log "updating 程序文件 ..."
+for m in ${UPDATE_MODULE[@]}; do
+    module_dir="${PROJECTS_DIR[$m]}"
+    rsync -a --delete "${SRC_DIR}/${module_dir}/" "$PREFIX/bkmonitorv3/${module_dir}/"
+done
 
-# 导入镜像
-docker load --quiet < "${MODULE_SRC_DIR}"/open_paas/support-files/images/bk-paas-"${PAAS_VERSION}".tar.gz
+# 渲染配置
+if [[ $UPDATE_CONFIG -eq 1 ]]; then
+    source /etc/blueking/env/local.env
+    $RENDER_TPL -u -m "$MODULE" -p "$PREFIX" \
+        -E LAN_IP="$LAN_IP" -e "$ENV_FILE" \
+        "${PREFIX}"/bkmonitorv3/support-files/templates/*
+else
+    # 走固定配置从$PREFIX/etc下拷贝回去
+    if [[ -d "$PREFIX"/etc/bkmonitorv3 ]]; then
+        rsync -av "$PREFIX"/etc/bkmonitorv3/ "$PREFIX"/bkmonitorv3/
+    fi
+fi
 
+chown blueking.blueking -R "${PREFIX}"/bkmonitorv3/
+BKMONITORV3_VERSION=$( cat "${MODULE_SRC_DIR}"/bkmonitorv3/VERSION )
 for m in "${UPDATE_MODULE[@]}"; do
-    short_m=${m##paas-}  # 去掉service name的paas前缀
-    # 渲染配置
-    if [[ $UPDATE_CONFIG -eq 1 ]]; then
-        source /etc/blueking/env/local.env
-        "$RENDER_TPL" -u -m "$MODULE" -p "$PREFIX" \
-            -E LAN_IP="$LAN_IP" -e "$ENV_FILE" \
-            "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*"${short_m}"*
+    if [[ $m = "bk-monitor" ]]; then
+        docker load --quiet < "${MODULE_SRC_DIR}"/bkmonitorv3/support-files/images/bk-monitor-"${BKMONITORV3_VERSION}".tar.gz
+        if [ "$(docker ps --all --quiet --filter name=bk-monitor)" != '' ]; then
+            log "container: bk-monitor already exists, stop and remove now" 
+            docker stop bk-monitor
+            docker rm bk-monitor
+        fi
+        docker run --detach --network=host \
+            --name bk-monitor \
+            --volume "$PREFIX"/bkmonitorv3:/data/bkce/bkmonitorv3 \
+            --volume "$PREFIX"/public/bkmonitorv3:/data/bkce/public/bkmonitorv3\
+            --volume "$PREFIX"/logs/bkmonitorv3:/data/bkce/logs/bkmonitorv3 \
+            --volume "$PREFIX"/etc/supervisor-bkmonitorv3-monitor-"$MONITOR_RUN_MODE".conf:/data/bkce/etc/supervisor-bkmonitorv3-monitor.conf \
+            bk-monitor:"$BKMONITORV3_VERSION"
+        
+        break
     fi
-    # 加载容器资源限额模板
-    if [ -f "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl ]; then
-        source "${MODULE_SRC_DIR}"/open_paas/support-files/images/resource.tpl
-        MAX_MEM=$(eval echo \${"${short_m}"_mem})
-        MAX_CPU_SHARES=$(eval echo \${"${short_m}"_cpu})
-    fi
-    if [ "$(docker ps --all --quiet --filter name=bk-paas-"${short_m}")" != '' ]; then
-        log 'Stop and removing running containers'
-        docker stop bk-paas-"${short_m}"
-        docker rm bk-paas-"${short_m}"
-    fi
-    docker run --detach --network=host \
-        --name bk-paas-"${short_m}" \
-        --cpu-shares "${MAX_CPU_SHARES:-1024}" \
-        --memory "${MAX_MEM:-512}" \
-        --volume "$PREFIX"/open_paas:/data/bkce/open_paas \
-        --volume "$CERT_PATH":/data/bkce/cert \
-        --volume "$PREFIX"/public/open_paas:/data/bkce/public/open_paas \
-        --volume "$PREFIX"/logs/open_paas:/data/bkce/logs/open_paas \
-        --volume "$PREFIX"/etc/uwsgi-open_paas-"${short_m}".ini:/data/bkce/etc/uwsgi-open_paas-"${short_m}".ini \
-        bk-paas-"${short_m}":"${PAAS_VERSION}"
+
+    # 重启进程
+    systemctl restart "$m"
 done
 
 # 检查本次更新的模块启动是否正常
-err_count=0
-log 'check status'
+running_status=()
 for m in "${UPDATE_MODULE[@]}"; do
-    if [[ "$(docker inspect --format '{{.State.Status}}' "bk-${m}")"  == 'running' ]]; then
-        printf '%s: %s\n' "bk-${m}" 'running'
-    else
-        printf '%s: %s\n' "bk-${m}" 'not running'
-        ((err_count++))
+    if [[ $m = "bk-monitor" ]]; then
+        running_status+=( "$(docker inspect --format '{{.State.Pid}} {{.Config.Image}} {{.State.Status}}' bk-monitor)" )
+        break
     fi
+    running_status+=( "$(systemctl show -p SubState,MainPID,Names "$m" | awk -F= '{print $2}'  | xargs)" )
 done
-if [[ "$err_count" == '0' ]]; then
-    log "启动成功的进程数量和更新的模块数量一致"
-else
+
+printf "%s\n" "${running_status[@]}"
+
+if [[ $(printf "%s\n" "${running_status[@]}" | grep -c running) -ne ${#UPDATE_MODULE[@]} ]]; then
     log "启动成功的进程数量少于更新的模块数量"
     exit 1
+else
+    log "启动成功的进程数量和更新的模块数量一致"
 fi

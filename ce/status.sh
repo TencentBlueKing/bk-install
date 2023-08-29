@@ -131,12 +131,34 @@ case $module in
         source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
         if [[ -z ${project} ]]; then
             projects=${_projects["${module}"]}
-            pcmdrc "${target}" "get_docker_service_status ${module}"
+            pcmdrc "${target}" "get_docker_service_status 'bk-${module}-.*'"
         else
-            pcmdrc "${target}" "get_docker_service_status ${module} ${project}"
+            pcmdrc "${target}" "get_docker_service_status bk-${module}-${project}"
         fi
         ;;
-    monitorv3|bkmonitorv3|log|bklog)
+    monitorv3|bkmonitorv3)
+        module=${module#bk*}
+        target_name=$(map_module_name "$module")
+        source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
+        if [ -z "${project}" ];then
+            for project in ${_projects[${module}]};do
+                emphasize "status ${module} ${project} on host: ${_project_ip["${target_name},${project}"]}"
+                if [[ "${project}" =~ "monitor" ]]; then
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_docker_service_status bk-${project}"
+                else
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${project}"
+                fi
+            done
+        else
+            emphasize "status ${module} ${project} on host: ${_project_ip["${target_name},${project}"]}"
+                if [[ "${project}" =~ "monitor" ]]; then
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_docker_service_status bk-${project}"
+                else
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${project}"
+                fi
+        fi
+        ;;
+    log|bklog)
         module=${module#bk*}
         target_name=$(map_module_name "$module")
         source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
@@ -183,7 +205,7 @@ case $module in
         ;;
     bknodeman|nodeman)
         target_name=${module#bk}
-        pcmdrc "${target_name}" "get_docker_service_status ${target_name}"
+        pcmdrc "${target_name}" "get_docker_service_status bk-${target_name}"
         pcmdrc "${target_name}" "get_service_status ${SERVICE["consul-template"]} ${SERVICE["nginx"]}"
         ;;
     paas_plugins|paas_plugin)

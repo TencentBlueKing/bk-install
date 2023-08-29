@@ -136,7 +136,9 @@ case $USERMGR_MODULE in
         # 导入镜像
         docker load --quiet < "$MODULE_SRC_DIR"/$MODULE/support-files/images/bk-usermgr-"$USERMGR_VERSION".tar.gz
         if [ "$(docker ps --all --quiet --filter name=bk-usermgr-$USERMGR_MODULE)" != '' ]; then
-            docker rm -f bk-usermgr-"$USERMGR_MODULE"
+            log "container: bk-usermgr-$USERMGR_MODULE already exists, stop and remove now" 
+            docker stop bk-usermgr-"$USERMGR_MODULE"
+            docker rm bk-usermgr-"$USERMGR_MODULE"
         fi
         # 加载容器资源限额模板
         if [ -f "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl ]; then

@@ -164,7 +164,9 @@ case $BKNODEMAN_MODULE in
         # 导入镜像
         docker load --quiet < "${MODULE_SRC_DIR}"/bknodeman/support-files/images/bk-nodeman-"${BKNODEMAN_VERSION}".tar.gz
         if [ "$(docker ps --all --quiet --filter name=bk-nodeman-${BKNODEMAN_MODULE})" != '' ]; then
-            docker rm -f bk-nodeman-${BKNODEMAN_MODULE}
+            log "container: bk-nodeman-${BKNODEMAN_MODULE} already exists, stop and remove now" 
+            docker stop bk-nodeman-${BKNODEMAN_MODULE}
+            docker rm bk-nodeman-${BKNODEMAN_MODULE}
         fi
         # 加载容器资源限额模板
         if [ -f "${MODULE_SRC_DIR}"/bknodeman/support-files/images/resource.tpl ]; then
