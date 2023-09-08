@@ -12,6 +12,14 @@ EXITCODE=0
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
 source $SELF_DIR/../functions
+
+# 需要安装虚拟环境的模块
+
+declare -a INSTALL_MODULES=(
+    "dashboard"
+    "bk-esb"
+)
+
 # 默认的绑定端口，配置文件已经写死
 declare -A PORTS=(
     ["dashboard"]=6000
@@ -94,10 +102,6 @@ while (( $# > 0 )); do
         -b | --bind )
             shift
             BIND_ADDR=$1
-            ;;
-        -m | --module )
-            shift
-            APIGW_MODULE=$1
             ;;
         -e | --env-file)
             shift
@@ -187,45 +191,47 @@ rsync -a --delete "${MODULE_SRC_DIR}"/$MODULE/ "$PREFIX/$MODULE/"
 
 chmod 755 -R "$PREFIX"/$MODULE/operator/ "$PREFIX"/$MODULE/apigateway-core-api/
 
-cat <<EOF > /etc/sysconfig/bk-apigw-"$APIGW_MODULE"
-PORT=${PORTS[$APIGW_MODULE]}
+
+for module in "${INSTALL_MODULES[@]}"; do
+    cat <<EOF > /etc/sysconfig/bk-apigw-"$module"
+    PORT=${PORTS[$module]}
 EOF
+    case $module in
+        bk-esb|dashboard)
+            # 安装虚拟环境和依赖包(使用加密解释器)
+            "${SELF_DIR}/install_py_venv_pkgs.sh" -e -p "$PYTHON_PATH" \
+            -n "apigw-${module}" \
+            -w "${PREFIX}/.envs" -a "$PREFIX/$MODULE/${module}" \
+            -s "${PREFIX}/$MODULE/support-files/pkgs" \
+            -r "${PREFIX}/$MODULE/${module}/requirements.txt"
 
-case $APIGW_MODULE in
-    bk-esb|dashboard)
-        # 安装虚拟环境和依赖包(使用加密解释器)
-        "${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \
-        -n "apigw-${APIGW_MODULE}" \
-        -w "${PREFIX}/.envs" -a "$PREFIX/$MODULE/${APIGW_MODULE}" \
-        -s "${PREFIX}/$MODULE/support-files/pkgs" \
-        -r "${PREFIX}/$MODULE/${APIGW_MODULE}/requirements.txt"
+            if [[ "$PYTHON_PATH" = *_e* ]]; then
+                # 拷贝加密解释器 //todo
+                cp -a "${PYTHON_PATH}"_e "$PREFIX/.envs/apigw-${module}/bin/python"
+            fi
 
-        if [[ "$PYTHON_PATH" = *_e* ]]; then
-        # 拷贝加密解释器 //todo
-        cp -a "${PYTHON_PATH}"_e "$PREFIX/.envs/apigw-${APIGW_MODULE}/bin/python"
-        fi
-
-        # migration
+            # migration
             (
                 set +u +e
-                export BK_FILE_PATH="$PREFIX"/$MODULE/cert/saas_priv.txt
+                export BK_FILE_PATH="$PREFIX/$MODULE/cert/saas_priv.txt"
                 export BKPAAS_ENVIRONMENT="env"
                 export BK_HOME=$PREFIX
 
-                cd $PREFIX/$MODULE/$APIGW_MODULE/
-                PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
+                cd "$PREFIX/$MODULE/$module/"
+                PATH="/$PREFIX/.envs/apigw-${module}/bin:$PATH" \
                 bash ./bin/on_migrate
-
             )
 
-            if [[ $? -ne 0 ]]; then
-                fail "bk_apigw($APIGW_MODULE) migrate failed"
+            if (( $? != 0 )); then
+                fail "bk_apigw($module) migrate failed"
             fi
-    ;;
-    *)
-        echo "unknown $APIGW_MODULE"
-        ;;
-esac
+            ;;
+        *)
+            echo "unknown $module"
+            ;;
+    esac
+done
+
 
 cat > /usr/lib/systemd/system/bk-apigw.service <<EOF
 [Unit]
@@ -278,7 +284,8 @@ export BK_HOME=$PREFIX
 
 wait_ns_alive apigw-dashboard.service.consul || fail "apigw-dashboard.service.consul无法解析"
 
-cd "$PREFIX"/$MODULE/"$APIGW_MODULE"/
-PATH=/$PREFIX/.envs/apigw-${APIGW_MODULE}/bin:$PATH \
-bash ./bin/post_migrate
-
+for module in "${INSTALL_MODULES[@]}"; do
+    cd "$PREFIX"/$MODULE/"$module"/
+    PATH=/$PREFIX/.envs/apigw-${module}/bin:$PATH \
+    bash ./bin/post_migrate
+done

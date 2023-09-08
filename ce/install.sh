@@ -725,16 +725,11 @@ install_apigw () {
     done
 
     # 安装 apigw
-    for project in dashboard bk-esb; do
-        project_port=${_project_port["${module},${project}"]}
-        project_consul=${_project_consul["${module},${project}"]}
-        for ip in "${BK_APIGW_IP_COMMA[@]}"; do 
-            emphasize "install ${module}(${project}) on host: ${ip}"
-            cost_time_attention
-            "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/install_bkapigw.sh -b \$LAN_IP -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' --cert-path '${INSTALL_PATH}/cert/etcd' -e '${CTRL_DIR}/bin/04-final/bkapigw.env'"
-        done
+    for ip in "${BK_APIGW_IP_COMMA[@]}"; do 
+        emphasize "install bk-apigateway on host: ${ip}"
+        cost_time_attention
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bkapigw.sh -b \$LAN_IP -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' --cert-path '${INSTALL_PATH}/cert/etcd' -e '${CTRL_DIR}/bin/04-final/bkapigw.env'"
     done
-
 
     emphasize "add or update appocode ${BK_APIGW_APP_CODE}"
     add_or_update_appcode "$BK_APIGW_APP_CODE" "$BK_APIGW_APP_SECRET"
