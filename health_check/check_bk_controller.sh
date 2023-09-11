@@ -116,19 +116,18 @@ check_src_dir () {
         echo "no yum directory under /opt,  please extract it first."
         return 1
     fi
-    if ! [[ -r $BK_PKG_SRC_PATH/java8.tgz ]]; then
-        echo "no java8.tgz under $BK_PKG_SRC_PATH,  please download a jdk8 and rename it to java8.tgz."
-        return 1
-    fi
-    if [[ $(tar tf $BK_PKG_SRC_PATH/java8.tgz | awk '$NF ~ /\/bin\/java$/' | wc -l) -eq 0 ]]; then 
-        echo "java8.tgz不是一个合法的jre包，找不到bin/java结尾的文件"
-        return 1
-    fi
-    if ! [[ -d $BK_PKG_SRC_PATH/license ]]; then
-        echo "no $BK_PKG_SRC_PATH/license exits, please extract all *gz under $BK_PKG_SRC_PATH"
-        return 1
-    fi
+    for ver in 8 11; do
+        if ! [[ -r $BK_PKG_SRC_PATH/java${ver}.tgz ]]; then
+            echo "no java${ver}.tgz under $BK_PKG_SRC_PATH,  please download a jdk${ver} and rename it to java${ver}.tgz."
+            return 1
+        fi
+        if [[ $(tar tf $BK_PKG_SRC_PATH/java${ver}.tgz | awk '$NF ~ /\/bin\/java$/' | wc -l) -eq 0 ]]; then 
+            echo "java${ver}.tgz不是一个合法的jre包，找不到bin/java结尾的文件"
+            return 1
+        fi
+    done
 }
+
 
 is_module_odd_num () {
     local module=$1

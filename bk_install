@@ -65,8 +65,8 @@ case $service in
     paas)
         _bkc install consul
         _bkc start consul
-        _bkc sync license
-        _bkc install license
+#        _bkc sync license
+#        _bkc install license
         _bkc install mysql
         _bkc install redis
         _bkc install redis_sentinel
@@ -76,7 +76,7 @@ case $service in
         if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
             _bkc install nfs
         fi
-        _bkc start license
+#        _bkc start license
         _bkc start redis
         _bkc start redis_sentinel
         _bkc start nginx
@@ -161,7 +161,7 @@ case $service in
         _bkc install rabbitmq
         _bkc install cmdb
         _bkc install zk
-        _bkc install license
+#        _bkc install license
         _bkc install gse
         _bkc sync job
         _bkc install job backend
@@ -179,12 +179,12 @@ case $service in
         _bkc start mysql
         _bkc start cmdb
         _bkc initdata cmdb
-        _bkc start license
+#        _bkc start license
         _bkc start gse
         _bkc start job
 
         ./bkcli status redis_sentinel
-        for svs in mysql redis zk rabbitmq license cmdb gse job; do
+        for svs in mysql redis zk rabbitmq cmdb gse job; do
             ./bkcli status $svs
         done
 
