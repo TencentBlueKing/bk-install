@@ -124,7 +124,7 @@ case $module in
         module=${module#bk}
         target_name=$(map_module_name "${module}")
         pcmdrc "${target}" "get_service_status bk-${module}.* "
-    ;;
+        ;;
     paas|usermgr)
         module=${module#bk}
         target_name=$(map_module_name "${module}")

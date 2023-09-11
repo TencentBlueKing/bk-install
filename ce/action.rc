@@ -24,6 +24,14 @@ manage_container_service () {
     fi
 }
 
+manage_container_service_by_regex () {
+    local action=$1
+    local pattern=$2
+    while read docker_id project_name; do
+        _dockerctl ${action} ${docker_id} ${project_name}
+    done < <(docker ps --all  | awk -v PROJ="${pattern}" '$NF ~ PROJ {print $1, $NF}')
+}
+
 action_kafka () {
     local action=$1
     systemctl ${action} kafka.service
@@ -186,7 +194,10 @@ action_job () {
 action_monitorv3 () {
     local action=$1
     local project=$2
-    systemctl ${action} bk-${project}.service
+    case $project in
+        monitor) manage_container_service_by_regex ${action} 'bk-monitor' ;;
+        *) systemctl ${action} bk-${project}.service ;;
+    esac
 }
 
 action_nodeman () {
@@ -208,11 +219,10 @@ action_gse () {
 action_log () {
     local action=$1
     local project=$2
-    if [[ -z ${project} ]]; then
-        systemctl ${action} bk-log.target
-    else
-        systemctl ${action} bk-log-${project}.service
-    fi
+    case $project in
+        api) manage_container_service ${action} log ${project} ;;
+        *) systemctl ${action} bk-log-${project}.service ;;
+    esac
 }
 
 action_paas_plugins () {
