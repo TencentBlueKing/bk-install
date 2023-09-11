@@ -128,6 +128,7 @@ check_src_dir () {
     done
 }
 
+
 is_module_odd_num () {
     local module=$1
     local num=$(eval echo \${#${module}_IP[@]})

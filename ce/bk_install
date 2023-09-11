@@ -61,11 +61,14 @@ case $service in
     paas)
         _bkc install consul
         _bkc start consul
+#        _bkc sync license
+#        _bkc install license
         _bkc install mysql
         _bkc install redis
         _bkc start mysql
         _bkc install nginx
 
+#        _bkc start license
         _bkc start redis
         _bkc start nginx
 
@@ -144,6 +147,7 @@ case $service in
         _bkc install rabbitmq
         _bkc install cmdb
         _bkc install zk
+#        _bkc install license
         _bkc install gse
         _bkc sync job
         _bkc install job backend
@@ -156,6 +160,7 @@ case $service in
         _bkc start mysql
         _bkc start cmdb
         _bkc initdata cmdb
+#        _bkc start license
         _bkc start gse
         _bkc start job
 
