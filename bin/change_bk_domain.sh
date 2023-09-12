@@ -69,7 +69,11 @@ done
 
 # get which module need render
 # for k in "${NEW_DOMAIN_ENV_KEYS[@]}"; do grep __${k}__ -rl $BK_PKG_SRC_PATH/*/support-files/templates; done | awk -F/ '{print $4}' | sort -u
-NEED_RENDER_MODULES=($(sed 's/\n/\ /g' <<<$(for k in "${NEW_DOMAIN_ENV_KEYS[@]}"; do grep __${k}__ -rl $BK_PKG_SRC_PATH/*/support-files/templates; done | awk -F/ '{print $4}'| sort -u)))
+NEED_RENDER_MODULES=()
+
+while IFS=$'\n' read -r line; do 
+    NEED_RENDER_MODULES+=("$line")
+done < <(for k in "${NEW_DOMAIN_ENV_KEYS[@]}"; do grep __"${k}"__ -rl "$BK_PKG_SRC_PATH"/*/support-files/templates; done | awk -F/ '{print $4}'| sort -u)
 
 for module in "${NEED_RENDER_MODULES[@]}"; do
     case $module in
