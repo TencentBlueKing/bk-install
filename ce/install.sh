@@ -641,8 +641,6 @@ _install_paas_project () {
             "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_paas.sh -e '${CTRL_DIR}/bin/04-final/paas.env' -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
             emphasize "register consul ${project_consul} on host: ${ip}"
             reg_consul_svc "${project_consul}" "${project_port}" "$ip"
-            emphasize "sign host as module"
-            pcmdrc ${module} "_sign_host_as_module ${module}-${project}"
         done
     done
 
@@ -658,6 +656,9 @@ _install_paas_project () {
 
     # 版本信息
     _update_common_info
+    # TODO：paas 要支持拆分模块注册到机器，但是topo的逻辑需要适配
+    emphasize "sign host as module"
+    pcmdrc ${module} "_sign_host_as_module ${project}"
 }
 
 install_etcd () {
