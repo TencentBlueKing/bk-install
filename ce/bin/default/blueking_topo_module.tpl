@@ -62,6 +62,7 @@ paas 	appengine
 paas 	paas
 paas 	esb
 paas 	login
+paas 	console
 paas 	apigw
 paas 	appo
 paas 	appt
