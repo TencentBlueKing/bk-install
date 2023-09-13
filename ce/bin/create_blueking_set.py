@@ -61,7 +61,7 @@ class Message(object):
         'iam': ['bk-iam'],
         'iam_search_engine': ['bkiam-search-engine'],
         "ssm": ['bk-ssm'],
-        "paas": ["paas","appengine","esb","login","apigw"],  # 社区版不存在 console
+        "paas": ["paas","appengine","esb","login","apigw","console"],
         "es7": ["elasticsearch"],
         "zk": ["zookeeper"],
         "apigw": ["apigw-core-api","apigw-bk-esb","apigw-dashboard","apigw-operator"]

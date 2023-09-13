@@ -27,7 +27,7 @@ ENV_FILE=
 MODULES=()
 
 # 运行的模式
-RUN_MODE=stable
+JOB_RUN_MODE=stable
 
 usage () {
     cat <<EOF
@@ -38,7 +38,7 @@ usage () {
             [ -s, --srcdir      [必填] "从该目录拷贝 $MODULE_SRC_DIR/$MODULE 目录到 --prefix 指定的目录" ]
             [ -p, --prefix      [可选] "安装的目标路径，默认为 $PREFIX" ]
             [ -l, --log-dir     [可选] "日志目录,默认为$PREFIX/logs/$MODULE" ]
-            [ --run-mode        [可选] "选择作业平台的模式：lite & stable 默认为：$RUN_MODE"]
+            [ --run-mode        [可选] "选择作业平台的模式：lite & stable 默认为：$JOB_RUN_MODE"]
             [ -v, --version     [可选] 查看脚本版本号 ]
 EOF
 }
@@ -93,7 +93,7 @@ while (( $# > 0 )); do
             ;;
         --run-mode)
             shift
-            RUN_MODE=$1
+            JOB_RUN_MODE=$1
             ;;
         --help | -h | '-?' )
             usage_and_exit 0
@@ -193,11 +193,11 @@ if ! command -v yq &>/dev/null; then
 fi
 
 # 获取安装的子模块
-if [[ $RUN_MODE == "lite" ]]; then
+if [[ $JOB_RUN_MODE == "lite" ]]; then
     while IFS= read -r module; do
     MODULES+=("$module")
-    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy_assemble.yml")
-elif [[ $RUN_MODE == "stable" ]]; then
+    done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy_lite.yml")
+elif [[ $JOB_RUN_MODE == "stable" ]]; then
     while IFS= read -r module; do
     MODULES+=("$module")
     done < <(yq e '.services[].name' "${PREFIX}/$MODULE/deploy.yml")
@@ -207,11 +207,11 @@ fi
 for m in ${MODULES[@]}; do
     #short_m=${m//job-/}
 
-    if [[ $RUN_MODE == "lite" ]]; then
+    if [[ $JOB_RUN_MODE == "lite" ]]; then
         cat <<EOF > /etc/sysconfig/bk-"${m}"
-STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy_assemble.yml)"
+STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy_lite.yml)"
 EOF
-    elif [[ $RUN_MODE == "stable" ]]; then
+    elif [[ $JOB_RUN_MODE == "stable" ]]; then
         cat <<EOF > /etc/sysconfig/bk-"${m}"
 STARTUP_ARGS="$(yq e '.services[] | select(.name == "'"$m"'").args' "${PREFIX}"/$MODULE/deploy.yml)"
 EOF
@@ -243,7 +243,7 @@ WantedBy=bk-job.target
 EOF
 
     # 启动依赖job-config的启动
-    if [[ $RUN_MODE == "stable" ]]; then
+    if [[ $JOB_RUN_MODE == "stable" ]]; then
         if [[ $m != job-config ]]; then
             sed -i '/WorkingDirectory/a ExecStartPre=/bin/bash -c "until host job-config.service.consul; do sleep 1; done"' /usr/lib/systemd/system/bk-"${m}".service
         fi

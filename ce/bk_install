@@ -301,6 +301,11 @@ case $service in
         echo ""
         ;;
     bkiam_search_engine|iam_search_engine)
+
+        printf 'BK_IAM_SAAS_APP_SECRET=%s\n' "$(mysql --login-path=mysql-default -NBe "select auth_token from open_paas.paas_app where code='bk_iam'")" | tee -a "$CTRL_DIR"/bin/03-userdef/bkiam_search_engine.env
+
+        ./bkcli install bkenv
+        ./bkcli sync common
         _bkc sync iam_search_engine
         _bkc install es7
         _bkc start es7

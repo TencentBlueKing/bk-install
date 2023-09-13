@@ -8,6 +8,7 @@ appengine	uwsgi	open_paas-appengine	uwsgi-open_paas-appengine.ini		8000	TCP
 paas	uwsgi	open_paas-paas	uwsgi-open_paas-paas.ini		8001	TCP
 esb	uwsgi	open_paas-esb	uwsgi-open_paas-esb.ini		8002	TCP
 login	uwsgi	open_paas-login	uwsgi-open_paas-login.ini		8003	TCP
+console	uwsgi	open_paas-console	uwsgi-open_paas-console.ini		8004	TCP
 apigw	uwsgi	open_paas-apigw	uwsgi-open_paas-apigw.ini		8005	TCP
 appo	paas_agent	paas_agent			4245	TCP
 appt	paas_agent	paas_agent			4245	TCP
