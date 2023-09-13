@@ -165,7 +165,6 @@ install -o blueking -g blueking -m 755 -d /etc/blueking/env
 install -o blueking -g blueking -m 755 -d "$PREFIX/$MODULE"
 install -o blueking -g blueking -m 755 -d "$PREFIX/public/$MODULE"
 install -o blueking -g blueking -m 755 -d /var/run/bkmonitorv3
-chown -R blueking.blueking "$PREFIX/$MODULE" "$LOG_DIR"
 
 # 配置/var/run临时目录重启后继续生效
 cat > /etc/tmpfiles.d/bkmonitorv3.conf <<EOF
@@ -201,8 +200,18 @@ case $BKMONITOR_MODULE in
         export ES7_PASSWORD=$BK_MONITOR_ES7_PASSWORD
         export KAFKA_HOST=$BK_MONITOR_KAFKA_HOST
         export KAFKA_PORT=$BK_MONITOR_KAFKA_PORT
-        set -u
+        env_tmp=$(mktemp /tmp/install-monitor-XXXXX)
+        cat >>"$env_tmp"<<_ENV
+$(cat "$ENV_FILE")
 
+BK_INFLUXDB_BKMONITORV3_IP0=$(echo ${BK_INFLUXDB_BKMONITORV3_IP0})
+$(
+    if [[ -n $BK_INFLUXDB_BKMONITORV3_IP1 ]]; then
+        echo BK_INFLUXDB_BKMONITORV3_IP1=$(echo ${BK_INFLUXDB_BKMONITORV3_IP1})
+    fi
+)
+_ENV
+        set -u
         if [[ -z "$INFLUXDB_BKMONITORV3_IP0" ]]; then
             echo "influxdb (bkmonitorv3) or \$INFLUXDB_BKMONITORV3_IP0 is not configured."
             exit 1
@@ -217,9 +226,9 @@ case $BKMONITOR_MODULE in
             docker stop bk-"$BKMONITOR_MODULE"
             docker rm bk-"$BKMONITOR_MODULE"
         fi
-
         docker run --detach --network=host \
             --name bk-"$BKMONITOR_MODULE" \
+            --env-file "$env_tmp" \
             --volume "$PREFIX"/bkmonitorv3:/data/bkce/bkmonitorv3 \
             --volume "$CERT_PATH":/data/bkce/cert \
             --volume "$PREFIX"/public/bkmonitorv3:/data/bkce/public/bkmonitorv3\
@@ -357,6 +366,7 @@ EOF
 
 esac
 
+chown -R blueking.blueking "$PREFIX/$MODULE" "$LOG_DIR"
 systemctl daemon-reload
 systemctl start "bk-${BKMONITOR_MODULE}"
 

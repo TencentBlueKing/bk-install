@@ -284,6 +284,8 @@ fi
 
 chown blueking.blueking -R "${PREFIX}"/bkmonitorv3/
 BKMONITORV3_VERSION=$( cat "${MODULE_SRC_DIR}"/bkmonitorv3/VERSION )
+# 加载influxdb存储相关的配置
+source "${SELF_DIR}"/../load_env.sh 
 for m in "${UPDATE_MODULE[@]}"; do
     if [[ $m = "bk-monitor" ]]; then
         docker load --quiet < "${MODULE_SRC_DIR}"/bkmonitorv3/support-files/images/bk-monitor-"${BKMONITORV3_VERSION}".tar.gz
@@ -294,6 +296,9 @@ for m in "${UPDATE_MODULE[@]}"; do
         fi
         docker run --detach --network=host \
             --name bk-monitor \
+            --env  BK_INFLUXDB_BKMONITORV3_IP0="$BK_INFLUXDB_BKMONITORV3_IP0" \
+            --env  BK_INFLUXDB_BKMONITORV3_IP1="$BK_INFLUXDB_BKMONITORV3_IP1" \
+            --env-file "$ENV_FILE" \
             --volume "$PREFIX"/bkmonitorv3:/data/bkce/bkmonitorv3 \
             --volume "$PREFIX"/public/bkmonitorv3:/data/bkce/public/bkmonitorv3\
             --volume "$PREFIX"/logs/bkmonitorv3:/data/bkce/logs/bkmonitorv3 \
