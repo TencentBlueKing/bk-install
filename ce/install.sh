@@ -1119,7 +1119,7 @@ install_paas_plugins () {
     "${SELF_DIR}"/sync.sh "paas" "${BK_PKG_SRC_PATH}/java11.tgz" "${BK_PKG_SRC_PATH}/"
 
     emphasize "install java11 on host: ${BK_PAAS_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m "paas" "mkdir ${INSTALL_PATH}/jvm/;tar -xf ${BK_PKG_SRC_PATH}/java11.tgz --strip-component=1 -C ${INSTALL_PATH}/jvm/"
+    "${SELF_DIR}"/pcmd.sh -m "paas" "mkdir -p ${INSTALL_PATH}/jvm/;tar -xf ${BK_PKG_SRC_PATH}/java11.tgz --strip-component=1 -C ${INSTALL_PATH}/jvm/"
 
     emphasize "install log_agent,log_parser on host: ${BK_PAAS_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m "paas" "${CTRL_DIR}/bin/install_paas_plugins.sh -m paas --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/paas_plugins.env \
