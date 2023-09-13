@@ -474,7 +474,7 @@ set_console_desktop () {
             err "Failed to set up desktop app: $app_code "
         fi
         # 默认将所有部署的应用展示在admin的桌面
-        "${CTRL_DIR}"/pcmd.sh -H "$BK_PAAS_IP0" "workon open_paas-console; export BK_ENV=\"production\"; export BK_FILE_PATH=\"$INSTALL_PATH/open_paas/cert/saas_priv.txt\";python manage.py add_app_to_desktop --app_code=\"$app_code\" --username=\"$user\"" &>/dev/null
+        "${CTRL_DIR}"/pcmd.sh -H "$BK_PAAS_IP0" "docker exec -e BK_ENV=\"production\" bk-paas-console python manage.py add_app_to_desktop --app_code=\"$app_code\" --username=\"$user\"" &>/dev/null
     fi
    
 }
