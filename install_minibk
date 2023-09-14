@@ -47,9 +47,13 @@ bash ./configure_ssh_without_pass
 if [[ "$AUTO_YES" -eq 1 ]]; then
     ./bk_install common && ./health_check/check_bk_controller.sh && ./bk_install paas && ./bk_install app_mgr \
     && ./bk_install apigw  && ./bk_install paas_plugin \
+    && ./bk_install saas-o bk_iam && ./bk_install saas-o bk_user_manage \
+    && ./bk_install bkiam_search_engine \
     && ./bk_install cmdb && ./bk_install job \
     && ./bk_install bknodeman \
-    && ./bk_install saas-o bk_iam && ./bk_install saas-o bk_user_manage && ./bk_install saas-o bk_sops && ./bk_install saas-o bk_itsm
+    && ./bk_install saas-o bk_sops && ./bk_install saas-o bk_itsm \
+    
+
 else
     echo "you can use following command to install whole blueking suit in one command"
     echo "./bk_install common && ./bk_install paas && ./bk_install app_mgr && ./bk_install apigw && ./bk_install paas_plugin &&./bk_install cmdb \\"
@@ -62,11 +66,12 @@ else
     echo "./bk_install app_mgr"
     echo "./bk_install apigw"
     echo "./bk_install paas_plugin"
+    echo "./bk_install saas-o bk_iam"
+    echo "./bk_install saas-o bk_user_manage"
+    echo "./bk_install bkiam_search_engine"
     echo "./bk_install cmdb"
     echo "./bk_install job"
     echo "./bk_install bknodeman"
-    echo "./bk_install saas-o bk_iam"
-    echo "./bk_install saas-o bk_user_manage"
     echo "./bk_install saas-o bk_sops"
     echo "./bk_install saas-o bk_itsm"
     echo
