@@ -4,12 +4,12 @@ bk-iam	iam	bk-iam	bkiam_config.yaml		5001	TCP
 bkiam-search-engine	iam-search-engine	bkiam-search-engine	bkiam_search_engine_config.yaml		5003	TCP
 bk-ssm	ssm	ssm	bkssm_config.yaml		5000	TCP
 						
-appengine	uwsgi	open_paas-appengine	uwsgi-open_paas-appengine.ini		8000	TCP
-paas	uwsgi	open_paas-paas	uwsgi-open_paas-paas.ini		8001	TCP
-esb	uwsgi	open_paas-esb	uwsgi-open_paas-esb.ini		8002	TCP
-login	uwsgi	open_paas-login	uwsgi-open_paas-login.ini		8003	TCP
-console	uwsgi	open_paas-console	uwsgi-open_paas-console.ini		8004	TCP
-apigw	uwsgi	open_paas-apigw	uwsgi-open_paas-apigw.ini		8005	TCP
+appengine					8000	TCP
+paas					8001	TCP
+esb					8002	TCP
+login					8003	TCP
+console					8004	TCP
+apigw					8005	TCP
 appo	paas_agent	paas_agent			4245	TCP
 appt	paas_agent	paas_agent			4245	TCP
 						
@@ -46,17 +46,17 @@ cmdb-web	cmdb_webserver	cmdb_webserver			9013	TCP
 cmdb-cache	cmdb_cacheservice	cmdb_cacheservice			9014	TCP
 						
 						
-monitor	python	bk-monitor	gunicorn_config.py		10204	TCP
+monitor					10204	TCP
 transfer	transfer	bk-transfer			10202	TCP
 influxdb-proxy	influxdb-proxy	bk-influxdb-proxy			10203	TCP
 grafana	grafana-server	bk-grafana	logs/bkmonitorv3/	0.0.0.0	3000	TCP
 unify-query	unify-query	bk-unify-query			10206	TCP
 ingester	ingester	bk-ingester			10220	TCP
 						
-nodeman-api	python	nodeman-api	bknodeman-nodeman/bin/gunicorn		10300	TCP
+nodeman-api					10300	TCP
 						
-bklog-api	python	bklog-api	bklog-api/bin/gunicorn -c gunicorn_config		10400	TCP
-bklog-grafana	grafana-server	bk-log-grafana	logs/bklog/		10401	TCP
+bklog-api					10400	TCP
+bklog-grafana					10401	TCP
 						
 						
 beanstalk	beanstalkd	beanstalkd	beanstalkd	0.0.0.0	11300	TCP
@@ -74,7 +74,7 @@ consul-template	consul-template	consul-template	/etc/consul-template/conf.d	0.0.
 redis_cluster	redis-server	redis-cluster			6380	TCP
 						
 controller_ip	controller_ip					
-usermgr	python	usermgr	usermgr-api/bin/gunicorn	0.0.0.0	8009	TCP
+usermgr				0.0.0.0	8009	TCP
 license	license_server	license	license.json	0.0.0.0	8443	TCP
 						
 auth	bkauth	bkauth	bkauth		5009	TCP
@@ -85,4 +85,3 @@ apigw-dashboard	python	apigw-dashboard		0.0.0.0	6000	TCP
 apigw-operator	micro-gateway-operator	apigw-operator		0.0.0.0	6004	TCP
 						
 bcs	bcs	bcs				TCP
-						
