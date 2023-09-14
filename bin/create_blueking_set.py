@@ -45,7 +45,7 @@ class Message(object):
         "节点管理": "nodeman",
         "日志平台": "log",
         "容器管理平台": "bcs",
-        "蓝鲸API网关": "apigw"
+        "蓝鲸API网关": "apigateway"
     }
 
     # 多进程单台服务器部署时无法获取进程列表. 与blueking_topo_module.tpl绑定, 新增进程可能需要更改
@@ -63,7 +63,7 @@ class Message(object):
         "paas": ["paas","appengine","esb","login","console","apigw"],
         "es7": ["elasticsearch"],
         "zk": ["zookeeper"],
-        "apigw": ["apigw-core-api", "apigw-bk-esb", "apigw-dashboard", "apigw-operator"]
+        "apigateway": ["apigw-core-api", "apigw-bk-esb", "apigw-dashboard", "apigw-operator"]
     }
 
 class Action(object):
