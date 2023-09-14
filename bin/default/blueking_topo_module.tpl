@@ -7,6 +7,7 @@ jobv3	job-logsvr
 jobv3	job-manage
 jobv3	job-backup
 jobv3	job-analysis
+	
 cmdb	cmdb-admin
 cmdb	cmdb-api
 cmdb	cmdb-core
@@ -75,10 +76,9 @@ user	usermgr
 user	bkiam-search-engine
 user	auth
 	
-apigw	apigw-core-api
-apigw	apigw-bk-esb
-apigw	apigw-dashboard
-apigw	apigw-operator
+apigateway	apigw-core-api
+apigateway	apigw-bk-esb
+apigateway	apigw-dashboard
+apigateway	apigw-operator
 	
 bcs	bcs
-	

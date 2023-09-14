@@ -814,7 +814,7 @@ install_apigw () {
     add_or_update_appcode bk_apigw_test "$BK_APIGW_TEST_APP_SECRET"
 
     emphasize "sign host as module"
-    pcmdrc ${module} "_sign_host_as_module ${module}"
+    pcmdrc ${module} "_sign_host_as_module apigateway"
 }
 
 install_python () {

@@ -76,10 +76,10 @@ user	usermgr
 user	bkiam-search-engine
 user	auth
 	
-apigw	apigw-core-api
-apigw	apigw-bk-esb
-apigw	apigw-dashboard
-apigw	apigw-operator
+apigateway	apigw-core-api
+apigateway	apigw-bk-esb
+apigateway	apigw-dashboard
+apigateway	apigw-operator
 	
 bcs 	bcs
 	
