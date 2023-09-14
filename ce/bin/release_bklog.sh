@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# 用途：更新蓝鲸的用户管理后台
-# shellcheck disable=SC1091
+# 用途：更新蓝鲸的日志平台后台
 
 # 安全模式
 set -euo pipefail 
@@ -16,8 +15,7 @@ EXITCODE=0
 
 # 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-MODULE=usermgr
-USERMGR_MODULE=api
+MODULE=bklog
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
 # 蓝鲸产品包解压后存放的默认目录
@@ -25,7 +23,7 @@ MODULE_SRC_DIR=/data/src
 # 渲染配置文件用的脚本
 RENDER_TPL=${SELF_DIR}/render_tpl
 # 渲染配置用的环境变量文件
-ENV_FILE=${SELF_DIR}/04-final/usermgr.env
+ENV_FILE=${SELF_DIR}/04-final/bklog.env
 # 如果使用tgz来更新，则从该目录来找tgz文件
 RELEASE_DIR=/data/release
 # 如果使用tgz来更新，该文件的文件名
@@ -36,6 +34,8 @@ BACKUP_DIR=/data/src/backup
 UPDATE_CONFIG=
 # 更新模式（tgz|src）
 RELEASE_TYPE=
+
+BKLOG_MODULE=(api)
 
 usage () {
     cat <<EOF
@@ -182,7 +182,7 @@ if (( EXITCODE > 0 )); then
 fi
 
 # 备份老的包，并解压新的
-tar -czf "$BACKUP_DIR/usermgr_$(date +%Y%m%d_%H%M).tgz" -C "$PREFIX" usermgr etc/supervisor-usermgr-api.conf
+tar -czf "$BACKUP_DIR/bklog_$(date +%Y%m%d_%H%M).tgz" -C "$PREFIX" bklog etc/supervisor-bklog-api.conf
 
 # 更新文件（因为是python的包，用--delete为了删除一些pyc的缓存文件）
 if [[ $RELEASE_TYPE = tgz ]]; then
@@ -194,50 +194,53 @@ if [[ $RELEASE_TYPE = tgz ]]; then
     tar -xf "$TGZ_PATH" -C "$TMP_DIR"/
     # 更新全局文件
     log "updating 全局文件 ..."
-    rsync -a --delete "${TMP_DIR}/usermgr/" "$PREFIX/usermgr/"
+    rsync -a --delete "${TMP_DIR}/bklog/" "$PREFIX/bklog/"
 else
-    rsync -a --delete "${MODULE_SRC_DIR}/usermgr/" "$PREFIX/usermgr/"
+    rsync -a --delete "${MODULE_SRC_DIR}/bklog/" "$PREFIX/bklog/"
 fi
-
-USERMGR_VERSION=$( cat "$PREFIX"/usermgr/VERSION )
 
 # 渲染配置
 if [[ $UPDATE_CONFIG -eq 1 ]]; then
     source /etc/blueking/env/local.env
-    "$SELF_DIR"/render_tpl -u -m usermgr -p "$PREFIX" \
+    "$SELF_DIR"/render_tpl -u -m bklog -p "$PREFIX" \
         -e "$ENV_FILE" \
-        "$PREFIX"/usermgr/support-files/templates/*
+        -E LAN_IP="$LAN_IP" \
+        "$PREFIX"/bklog/support-files/templates/*
 else
     # 走固定配置从$PREFIX/etc下拷贝回去
-    if [[ -d "$PREFIX"/etc/usermgr ]]; then
-        rsync -av "$PREFIX"/etc/usermgr/ "$PREFIX"/usermgr/
+    if [[ -d "$PREFIX"/etc/bklog ]]; then
+        rsync -av "$PREFIX"/etc/bklog/ "$PREFIX"/bklog/
     fi
 fi
 
-chown blueking.blueking -R "$PREFIX/$MODULE"
+# 修改权限
+chown blueking.blueking -R "$PREFIX/bklog/" "${PREFIX}/logs/bklog/"
 
-# 导入镜像
-docker load --quiet < "$MODULE_SRC_DIR"/$MODULE/support-files/images/bk-usermgr-"$USERMGR_VERSION".tar.gz
-if [ "$(docker ps --all --quiet --filter name=bk-usermgr-$USERMGR_MODULE)" != '' ]; then
-    log 'Stop and removing running containers'
-    docker stop bk-usermgr-"$USERMGR_MODULE"
-    docker rm bk-usermgr-"$USERMGR_MODULE"
-fi
-# 加载容器资源限额模板
-if [ -f "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl ]; then
-    # shellcheck source=/dev/null
-    source "$MODULE_SRC_DIR/$MODULE"/support-files/images/resource.tpl
-    # shellcheck disable=SC1083
-    MAX_MEM=$(eval echo \${"${USERMGR_MODULE}"_mem})
-    # shellcheck disable=SC1083
-    MAX_CPU_SHARES=$(eval echo \${"${USERMGR_MODULE}"_cpu})
-fi
-docker run --detach --network=host \
-    --name bk-usermgr-"$USERMGR_MODULE" \
-    --cpu-shares "${MAX_CPU_SHARES:-1024}" \
-    --memory "${MAX_MEM:-512}" \
-    --volume "$PREFIX"/"$MODULE":/data/bkce/"$MODULE" \
-    --volume "$PREFIX"/public/"$MODULE":/data/bkce/public/"$MODULE" \
-    --volume "$PREFIX"/logs/"$MODULE":/data/bkce/logs/"$MODULE" \
-    --volume "$PREFIX"/etc/supervisor-usermgr-api.conf:/data/bkce/etc/supervisor-usermgr-api.conf \
-    bk-usermgr-"$USERMGR_MODULE":"$USERMGR_VERSION"
+BKLOG_VERSION=$( cat "${MODULE_SRC_DIR}"/bklog/VERSION )
+case $BKLOG_MODULE in 
+    api) 
+        docker load --quiet < "${MODULE_SRC_DIR}"/bklog/support-files/images/bk-log-api-"${BKLOG_VERSION}".tar.gz
+        if [ "$(docker ps --all --quiet --filter name=bk-log-api)" != '' ]; then
+            log "container: bk-log-api already exists, stop and remove now" 
+            docker stop bk-log-api
+            docker rm bk-log-api
+        fi
+        # 加载容器资源限额模板
+        if [ -f "${MODULE_SRC_DIR}"/bklog/support-files/images/resource.tpl ]; then
+            source "${MODULE_SRC_DIR}"/bklog/support-files/images/resource.tpl
+            # shellcheck disable=SC1083
+            MAX_MEM=$(eval echo \${"${BKLOG_MODULE}"_mem})
+            # shellcheck disable=SC1083
+            MAX_CPU_SHARES=$(eval echo \${"${BKLOG_MODULE}"_cpu})
+        fi
+        docker run --detach --network=host \
+            --name bk-log-api \
+            --cpu-shares "${MAX_CPU_SHARES:-1024}" \
+            --memory "${MAX_MEM:-4096}" \
+            --volume "$PREFIX"/bklog:/data/bkce/bklog \
+            --volume "$PREFIX"/public/bklog:/data/bkce/public/bklog\
+            --volume "$PREFIX"/logs/bklog:/data/bkce/logs/bklog \
+            --volume "$PREFIX"/etc/supervisor-bklog-api.conf:/data/bkce/etc/supervisor-bklog-api.conf \
+            bk-log-api:"$BKLOG_VERSION"
+        ;;
+esac

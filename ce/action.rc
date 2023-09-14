@@ -1,0 +1,346 @@
+set -e
+
+_dockerctl () {
+    local action=$1
+    local docker_id=$2
+    local project_name=$3
+    echo "trying to ${action} ${project_name}"
+    if docker ${action} ${docker_id} >/dev/null; then
+        echo "${action} ${project_name} success!"
+    fi
+}
+
+manage_container_service () {
+    local action=$1
+    local module=$2
+    local project=$3
+    if [[ -n "${project}" ]]; then
+        local docker_id=$(docker ps --all | awk -v PROJ="^bk-${module}-${project}" '$NF ~ PROJ {print $1; exit}')
+        _dockerctl ${action} ${docker_id} "bk-${module}-${project}"
+    else
+        while read docker_id project_name; do
+            _dockerctl ${action} ${docker_id} ${project_name}
+        done < <(docker ps --all  | awk -v PROJ="^bk-${module}-" '$NF ~ PROJ {print $1, $NF}')
+    fi
+}
+
+manage_container_service_by_regex () {
+    local action=$1
+    local pattern=$2
+    while read docker_id project_name; do
+        _dockerctl ${action} ${docker_id} ${project_name}
+    done < <(docker ps --all  | awk -v PROJ="${pattern}" '$NF ~ PROJ {print $1, $NF}')
+}
+
+action_kafka () {
+    local action=$1
+    systemctl ${action} kafka.service
+}
+
+action_paas () {
+    local action=$1
+    local project=$2
+    manage_container_service ${action} paas ${project}
+}
+
+action_usermgr () {
+    local action=$1
+    local project=$2
+    manage_container_service ${action} usermgr ${project}
+}
+
+action_consul () {
+    local action=$1
+    systemctl ${action} consul.service
+}
+
+action_pypi () {
+    local action=$1
+    systemctl ${action} pypiserver.service
+}
+
+action_mysql () {
+    local action=$1
+    local project=$2
+    if [[ -z ${project} ]]; then
+        systemctl $action mysql@default.service
+    else
+        systemctl ${action} mysql@${project}.service
+    fi
+}
+
+action_redis_sentinel () {
+    local action=$1
+    systemctl ${action} redis-sentinel@default.service
+    systemctl ${action} redis@mymaster.service
+}
+
+action_redis () {
+    local action=$1
+    local project=$2
+    if [[ -z ${project} ]]; then
+        systemctl $action redis@default.service
+    else
+        systemctl ${action} redis@${project}.service
+    fi
+}
+
+action_redis_cluster () {
+    local action=$1
+    systemctl ${action}  redis-cluster.target
+}
+
+action_rabbitmq () {
+    local action=$1
+    systemctl ${action} rabbitmq-server.service
+}
+
+action_zk () {
+    local action=$1
+    systemctl ${action} zookeeper.service
+}
+
+action_mongodb () {
+    local action=$1
+    systemctl ${action} mongod.service
+}
+
+action_es7 () {
+    local action=$1
+    systemctl ${action} elasticsearch.service
+}
+
+action_influxdb () {
+    local action=$1
+    systemctl ${action} influxdb.service
+}
+
+action_license () {
+    local action=$1
+    systemctl ${action} bk-license.service
+}
+
+action_iam () {
+    local action=$1
+    systemctl ${action} bk-iam.service
+}
+
+action_iam_search_engine () {
+    local action=$1
+    systemctl ${action} bk-iam-search-engine.service
+}
+
+action_ssm () {
+    local action=$1
+    systemctl ${action} bk-ssm.service
+}
+
+action_auth () {
+    local action=$1
+    systemctl ${action} bk-auth.service
+}
+
+action_lesscode () {
+    local action=$1
+    systemctl ${action} bk-lesscode.service
+}
+
+action_cmdb () {
+    local action=$1
+    local project=$2
+    if [[ -z ${project} ]]; then
+        systemctl $action bk-cmdb.target
+    else
+        systemctl ${action} bk-cmdb-${project}.service
+    fi
+}
+
+action_consul_template () {
+    local action=$1
+    systemctl ${action} consul-template.service
+}
+
+action_nginx () {
+    local action=$1
+    systemctl ${action} openresty.service
+    systemctl ${action} consul-template.service
+}
+
+action_appo () {
+    local action=$1
+    systemctl ${action} bk-paasagent.service
+}
+
+action_appt () {
+    local action=$1
+    systemctl ${action} bk-paasagent.service
+}
+
+action_docker () {
+    local action=$1
+    systemctl ${action} docker.service
+}
+
+action_job () {
+    local action=$1
+    local project=$2
+    if [[ -z ${project} ]]; then
+        systemctl $action bk-job.target
+    else
+        systemctl ${action} bk-job-${project}.service
+    fi
+}
+
+action_monitorv3 () {
+    local action=$1
+    local project=$2
+    case $project in
+        monitor) manage_container_service_by_regex ${action} 'bk-monitor' ;;
+        *) systemctl ${action} bk-${project}.service ;;
+    esac
+}
+
+action_nodeman () {
+    local action=$1
+    local project=$2
+    manage_container_service ${action} nodeman ${project}
+}
+
+action_gse () {
+    local action=$1
+    local project=$2
+    if [[ -z ${project} ]]; then
+        systemctl ${action} bk-gse.target
+    else
+        systemctl ${action} bk-gse-${project}.service
+    fi
+}
+
+action_log () {
+    local action=$1
+    local project=$2
+    case $project in
+        api) manage_container_service ${action} log ${project} ;;
+        *) systemctl ${action} bk-log-${project}.service ;;
+    esac
+}
+
+action_paas_plugins () {
+    local action=$1
+    local project=$2
+    case ${project} in 
+        paas)
+            if [[ $LAN_IP == $BK_PAAS_IP0 ]];then
+            systemctl ${action} bk-paas-plugins-log-alert.service
+            fi
+            systemctl ${action} bk-logstash.target
+            systemctl ${action} bk-filebeat.target
+            ;;
+        appo|appt)
+            systemctl ${action} bk-filebeat.target
+            ;;
+    esac
+}
+
+action_beanstalk () {
+    local action=$1
+    systemctl ${action} beanstalkd.service
+}
+
+action_fta () {
+    local action=$1
+    systemctl ${action} bk-fta.service
+}
+
+action_yum () {
+    local action=$1
+    systemctl ${action} bk-yum.service
+}
+
+action_nfs () {
+    local action=$1
+    systemctl ${action} nfs.service
+}
+
+action_saas () {
+    local action=$1
+    local project=$2
+    local docker_id
+    if ! which docker > /dev/null 2>&1; then
+        echo "Can't find docker command!"
+        return
+    fi
+
+    case ${action} in
+    stop)
+        if [ ! -z "$project" ]; then
+            echo "trying to stop ${project}"
+            docker_id=$(docker ps | awk -v PROJ="^${project}-" '$NF ~ PROJ {print $1; exit}')
+            if docker stop $docker_id >/dev/null; then
+                echo "stop ${project} success!"
+            fi
+        else
+            while read docker_id app_code ignore; do
+                echo "trying to stop ${app_code%-*}"
+                if docker stop $docker_id >/dev/null; then
+                    echo "stop ${app_code} success!"
+                fi
+            done < <(docker ps | awk 'NR > 1 {print $1, $NF}')
+        fi
+        ;;
+    start)
+        if [ ! -z "$project" ]; then
+            echo "trying to start ${project}"
+            docker_id=$(docker ps -a | awk -v PROJ="^${project}-" '$NF ~ PROJ {print $1; exit}')
+            if docker start $docker_id >/dev/null; then
+                echo "start ${project} success!"
+            fi
+        else
+            while read docker_id app_code ignore; do
+                echo "trying to start ${app_code%-*}"
+                if docker start $docker_id >/dev/null; then
+                    echo "start ${app_code} success!"
+                fi
+            done < <(docker ps -a | awk 'NR > 1 {print $1, $NF}')
+        fi
+        ;;
+    esac
+}
+
+action_bcs () {
+    local action=$1
+    local project=$2
+
+    if [[ "${project}" = "harbor-api" ]]; then
+        systemctl ${action} harbor_api.service
+    elif [[ "${project}" = "etcd" ]]; then
+        systemctl ${action} etcd.service
+    elif [[ "${project}" = "devops" ]]; then
+        systemctl ${action} devops.service
+    elif [[ "${project}" = "redis" ]]; then
+        systemctl ${action} redis@bcs.service
+    elif [[ "${project}" = "zk" ]]; then
+        systemctl ${action} zookeeper.service
+    elif [[ "${project}" = "mongodb" ]]; then
+        systemctl ${action} mongod.service
+    elif [[ "${project}" = "mysql" ]]; then
+        systemctl ${action} mysql@bcs.service
+    else
+        systemctl ${action} bcs-${project}.service
+    fi
+}
+
+action_apigw () {
+    local action=$1
+    systemctl $action bk-apigw.service
+}
+
+action_apisix () {
+    local action=$1
+    systemctl $action apisix.service
+}
+
+action_etcd (){
+    local action=$1
+    systemctl $action etcd.service
+}
