@@ -1,3 +1,3 @@
 10.0.0.1 iam,ssm,usermgr,gse,redis,consul,es7,monitorv3(influxdb-proxy),monitorv3(monitor),monitorv3(grafana),monitorv3(ingester),apigw
-10.0.0.2 nginx,consul,mongodb,rabbitmq,appo,influxdb(bkmonitorv3),monitorv3(transfer),beanstalk,monitorv3(unify-query),paas,iam_search_engine
-10.0.0.3 cmdb,job,mysql,zk(config),kafka(config),appt,consul,log(api),nodeman(nodeman),log(grafana),auth,redis_cluster,etcd
+10.0.0.2 consul,mongodb,rabbitmq,appo,influxdb(bkmonitorv3),monitorv3(transfer),beanstalk,monitorv3(unify-query),iam_search_engine
+10.0.0.3 paas,cmdb,job,mysql,nginx,zk(config),kafka(config),appt,consul,log(api),nodeman(nodeman),log(grafana),auth,redis_cluster,etcd
