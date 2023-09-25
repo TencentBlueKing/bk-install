@@ -71,6 +71,7 @@ systemctl disable --now redis@default.service
 systemctl disable --now mysql@default.service
 
 # if docker running, stop all,delete all,first
+step "clear all docker container"
 if mount | grep -q public/paas_agent/docker 2>/dev/null; then
     docker kill $(docker ps -q)
     docker rm $(docker ps -a -q)
@@ -82,6 +83,8 @@ fi
 
 # if docker start by systemd
 systemctl stop docker
+mount_product_point=$(mount | grep -E "$BK_HOME/public/docker/[a-z0-9]+" | awk '{print $3}')
+[[ $mount_product_point =~ docker ]] && umount $mount_product_point
 
 # STOP all process running under $BK_HOME
 step "kill all process running under $BK_HOME"
