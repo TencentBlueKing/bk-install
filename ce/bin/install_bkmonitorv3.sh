@@ -226,6 +226,15 @@ _ENV
             docker stop bk-"$BKMONITOR_MODULE"
             docker rm bk-"$BKMONITOR_MODULE"
         fi
+        log "start migrate"
+        docker run --rm --network=host \
+            --env-file "$env_tmp" \
+            --volume "$PREFIX"/bkmonitorv3:/data/bkce/bkmonitorv3 \
+            --volume "$CERT_PATH":/data/bkce/cert \
+            --volume "$PREFIX"/public/bkmonitorv3:/data/bkce/public/bkmonitorv3\
+            --volume "$PREFIX"/logs/bkmonitorv3:/data/bkce/logs/bkmonitorv3 \
+            bk-"$BKMONITOR_MODULE":"$BKMONITORV3_VERSION" ./runmigrate.sh
+        log "start app"
         docker run --detach --network=host \
             --name bk-"$BKMONITOR_MODULE" \
             --env-file "$env_tmp" \
