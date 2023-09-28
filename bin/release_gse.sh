@@ -44,6 +44,7 @@ UPDATE_CONFIG=
 RELEASE_TYPE=
 # 需要更新的模块列表
 UPDATE_MODULE=()
+LAN_IPV6=
 
 usage () {
     cat <<EOF
@@ -258,7 +259,7 @@ if [[ $UPDATE_CONFIG = 1 ]]; then
     if [[ -n $LAN_IPV6 ]];then
         $RENDER_TPL -u -m gse -p "$PREFIX" -E LAN_IP="$LAN_IP" -E LAN_IPV6="$LAN_IPV6" -e "$ENV_FILE" "$PREFIX"/gse/support-files/templates/#etc#gse*
     else
-        $RENDER_TPL -u -m gse -p "$PREFIX" -E LAN_IP="$LAN_IP" -E LAN_IPV6="$LAN_IPV6" -e "$ENV_FILE" "$PREFIX"/gse/support-files/templates/#etc#gse*
+        $RENDER_TPL -u -m gse -p "$PREFIX" -E LAN_IP="$LAN_IP" -e "$ENV_FILE" "$PREFIX"/gse/support-files/templates/#etc#gse*
     fi
 fi 
 for m in "${UPDATE_MODULE[@]}"; do
