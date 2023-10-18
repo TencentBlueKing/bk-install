@@ -447,6 +447,9 @@ case $1 in
         if [[ -z "$BK_BKLOG_REDIS_PASSWORD" ]]; then
             gen_redis_password "BK_BKLOG" "${redis_pwd}"
         fi
+        if [[ -z "$BK_BKLOG_RABBITMQ_PASSWORD" ]]; then
+            printf "%s=%q\n" BK_BKLOG_RABBITMQ_PASSWORD "$(rndpw 12)"
+        fi
         ;;
     lesscode)
         if [[ -r "$SELF_DIR"/01-generate/dbadmin.env ]]; then

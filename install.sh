@@ -1344,6 +1344,9 @@ install_bklog () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     projects=${_projects[${module}]}
 
+    emphasize "grant rabbitmq private for ${target_name}"
+    grant_rabbitmq_pri $target_name
+
     # 初始化sql
     emphasize "migrate sql for ${module}"
     migrate_sql $module 
