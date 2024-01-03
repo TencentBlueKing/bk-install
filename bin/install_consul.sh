@@ -176,7 +176,7 @@ cat <<EOF > /etc/consul.d/consul.json
     "data_dir": "$DATA_DIR",
     "node_name": "$NODE_NAME",
     "disable_update_check": true,
-    "enable_local_script_checks": true,
+    "enable_local_script_checks": false,
     "encrypt": "$ENCRYPT_KEY",
     "ports": {
         "dns": $DNS_PORT,
