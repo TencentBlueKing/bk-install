@@ -140,6 +140,16 @@ fi
 # 生成kafka配置
 log "生成默认的kafka主配置文件 /etc/kafka/server.properties"
 
+# 添加KAFKA_HEAP_OPTS
+# 检查文件中是否存在 KAFKA_HEAP_OPTS
+if grep -q "KAFKA_HEAP_OPTS" /etc/sysconfig/kafka; then
+  echo "KAFKA_HEAP_OPTS already exists. Skipping..."
+else
+  # 如果文件中不存在 KAFKA_HEAP_OPTS，则将其添加到文件末尾
+  echo "KAFKA_HEAP_OPTS=\"-Xmx2g -Xms2g\"" >> /etc/sysconfig/kafka
+  echo "KAFKA_HEAP_OPTS added to the config file."
+fi
+
 # 生成主配置
 cat <<EOF > /etc/kafka/server.properties
 broker.id=${myid}
